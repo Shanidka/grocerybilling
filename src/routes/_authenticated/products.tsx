@@ -31,7 +31,7 @@ type Product = {
   tax_pct: number;
   stock_qty: number;
   min_qty: number;
-  active: boolean;
+  max_qty: number;
 };
 
 function ProductsPage() {
