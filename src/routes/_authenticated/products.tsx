@@ -190,6 +190,7 @@ function ProductDialog({
   const [categoryId, setCategoryId] = useState<string>("");
   const [unit, setUnit] = useState("pcs");
   const [cost, setCost] = useState("0");
+  const [mrp, setMrp] = useState("0");
   const [margin, setMargin] = useState("0");
   const [selling, setSelling] = useState("0");
   const [tax, setTax] = useState("0");
@@ -203,12 +204,12 @@ function ProductDialog({
     if (editing) {
       setName(editing.name); setBarcode(editing.barcode ?? "");
       setCategoryId(editing.category_id ?? ""); setUnit(editing.unit);
-      setCost(String(editing.cost_price)); setMargin(String(editing.margin_pct));
+      setCost(String(editing.cost_price)); setMrp(String(editing.mrp ?? 0)); setMargin(String(editing.margin_pct));
       setSelling(String(editing.selling_price)); setTax(String(editing.tax_pct));
       setStock(String(editing.stock_qty)); setMinQ(String(editing.min_qty));
     } else {
       setName(""); setBarcode(""); setCategoryId(""); setUnit("pcs");
-      setCost("0"); setMargin("0"); setSelling("0"); setTax("0"); setStock("0"); setMinQ("0");
+      setCost("0"); setMrp("0"); setMargin("0"); setSelling("0"); setTax("0"); setStock("0"); setMinQ("0");
     }
   }, [open, editing]);
 
