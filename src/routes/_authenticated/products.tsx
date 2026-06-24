@@ -31,6 +31,7 @@ type Product = {
   tax_pct: number;
   stock_qty: number;
   min_qty: number;
+  max_qty: number;
   active: boolean;
 };
 
@@ -119,6 +120,7 @@ function ProductsPage() {
                 <th className="px-4 py-3 font-medium text-right">GST %</th>
                 <th className="px-4 py-3 font-medium text-right">Stock</th>
                 <th className="px-4 py-3 font-medium text-right">Min</th>
+                <th className="px-4 py-3 font-medium text-right">Max</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -142,6 +144,7 @@ function ProductsPage() {
                     <td className="px-4 py-3 text-right">{num(p.tax_pct)}%</td>
                     <td className={`px-4 py-3 text-right ${low ? "text-warning-foreground font-medium" : ""}`}>{num(p.stock_qty)}</td>
                     <td className="px-4 py-3 text-right">{num(p.min_qty)}</td>
+                    <td className="px-4 py-3 text-right">{num(p.max_qty)}</td>
                     <td className="px-4 py-3 text-right">
                       {allowed && (
                         <div className="flex justify-end gap-1">
@@ -158,7 +161,7 @@ function ProductsPage() {
                 );
               })}
               {!filtered.length && (
-                <tr><td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">No products yet. Add your first product to start billing.</td></tr>
+                <tr><td colSpan={11} className="px-4 py-10 text-center text-muted-foreground">No products yet. Add your first product to start billing.</td></tr>
               )}
             </tbody>
           </table>
@@ -196,6 +199,7 @@ function ProductDialog({
   const [tax, setTax] = useState("0");
   const [stock, setStock] = useState("0");
   const [minQ, setMinQ] = useState("0");
+  const [maxQ, setMaxQ] = useState("0");
   const [saving, setSaving] = useState(false);
 
   // Reset form when dialog opens
@@ -206,10 +210,10 @@ function ProductDialog({
       setCategoryId(editing.category_id ?? ""); setUnit(editing.unit);
       setCost(String(editing.cost_price)); setMrp(String(editing.mrp ?? 0)); setMargin(String(editing.margin_pct));
       setSelling(String(editing.selling_price)); setTax(String(editing.tax_pct));
-      setStock(String(editing.stock_qty)); setMinQ(String(editing.min_qty));
+      setStock(String(editing.stock_qty)); setMinQ(String(editing.min_qty)); setMaxQ(String(editing.max_qty ?? 0));
     } else {
       setName(""); setBarcode(""); setCategoryId(""); setUnit("pcs");
-      setCost("0"); setMrp("0"); setMargin("0"); setSelling("0"); setTax("0"); setStock("0"); setMinQ("0");
+      setCost("0"); setMrp("0"); setMargin("0"); setSelling("0"); setTax("0"); setStock("0"); setMinQ("0"); setMaxQ("0");
     }
   }, [open, editing]);
 
@@ -246,6 +250,7 @@ function ProductDialog({
         tax_pct: Number(tax) || 0,
         stock_qty: Number(stock) || 0,
         min_qty: Number(minQ) || 0,
+        max_qty: Number(maxQ) || 0,
       };
       if (editing) {
         const { error } = await supabase.from("products").update(payload).eq("id", editing.id);
@@ -326,6 +331,10 @@ function ProductDialog({
           <div className="space-y-1.5">
             <Label>Min stock (alert)</Label>
             <Input type="number" step="0.001" value={minQ} onChange={(e) => setMinQ(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Max stock (reorder target)</Label>
+            <Input type="number" step="0.001" value={maxQ} onChange={(e) => setMaxQ(e.target.value)} />
           </div>
         </div>
         <DialogFooter>

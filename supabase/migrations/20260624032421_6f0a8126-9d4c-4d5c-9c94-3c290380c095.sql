@@ -1,0 +1,1 @@
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS max_qty numeric NOT NULL DEFAULT 0;

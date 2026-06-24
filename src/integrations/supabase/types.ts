@@ -41,6 +41,7 @@ export type Database = {
           created_at: string
           id: string
           margin_pct: number
+          max_qty: number
           min_qty: number
           mrp: number
           name: string
@@ -58,6 +59,7 @@ export type Database = {
           created_at?: string
           id?: string
           margin_pct?: number
+          max_qty?: number
           min_qty?: number
           mrp?: number
           name: string
@@ -75,6 +77,7 @@ export type Database = {
           created_at?: string
           id?: string
           margin_pct?: number
+          max_qty?: number
           min_qty?: number
           mrp?: number
           name?: string
