@@ -158,7 +158,7 @@ function ProductsPage() {
                 );
               })}
               {!filtered.length && (
-                <tr><td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">No products yet. Add your first product to start billing.</td></tr>
+                <tr><td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">No products yet. Add your first product to start billing.</td></tr>
               )}
             </tbody>
           </table>
