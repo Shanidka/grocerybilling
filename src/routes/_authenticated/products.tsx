@@ -311,6 +311,11 @@ function ProductDialog({
           </div>
 
           <div className="space-y-1.5">
+            <Label>MRP</Label>
+            <Input type="number" step="0.01" value={mrp} onChange={(e) => setMrp(e.target.value)} placeholder="Maximum retail price" />
+          </div>
+
+          <div className="space-y-1.5">
             <Label>GST %</Label>
             <Input type="number" step="0.01" value={tax} onChange={(e) => setTax(e.target.value)} />
           </div>
