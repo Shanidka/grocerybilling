@@ -136,6 +136,7 @@ function ProductsPage() {
                     </td>
                     <td className="px-4 py-3 font-mono text-xs">{p.barcode || "—"}</td>
                     <td className="px-4 py-3 text-right">{inr(p.cost_price)}</td>
+                    <td className="px-4 py-3 text-right">{inr(p.mrp)}</td>
                     <td className="px-4 py-3 text-right">{num(p.margin_pct)}%</td>
                     <td className="px-4 py-3 text-right font-semibold">{inr(p.selling_price)}</td>
                     <td className="px-4 py-3 text-right">{num(p.tax_pct)}%</td>
