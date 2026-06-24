@@ -32,6 +32,7 @@ type Product = {
   stock_qty: number;
   min_qty: number;
   max_qty: number;
+  active: boolean;
 };
 
 function ProductsPage() {
