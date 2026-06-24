@@ -113,6 +113,7 @@ function ProductsPage() {
                 <th className="px-4 py-3 font-medium">Product</th>
                 <th className="px-4 py-3 font-medium">Barcode</th>
                 <th className="px-4 py-3 font-medium text-right">Cost</th>
+                <th className="px-4 py-3 font-medium text-right">MRP</th>
                 <th className="px-4 py-3 font-medium text-right">Margin %</th>
                 <th className="px-4 py-3 font-medium text-right">Selling</th>
                 <th className="px-4 py-3 font-medium text-right">GST %</th>
