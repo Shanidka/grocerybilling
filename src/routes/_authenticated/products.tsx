@@ -240,6 +240,7 @@ function ProductDialog({
         category_id: categoryId || null,
         unit: unit.trim() || "pcs",
         cost_price: Number(cost) || 0,
+        mrp: Number(mrp) || 0,
         margin_pct: Number(margin) || 0,
         selling_price: Number(selling) || 0,
         tax_pct: Number(tax) || 0,
