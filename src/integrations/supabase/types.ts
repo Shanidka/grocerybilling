@@ -42,6 +42,7 @@ export type Database = {
           id: string
           margin_pct: number
           min_qty: number
+          mrp: number
           name: string
           selling_price: number
           stock_qty: number
@@ -58,6 +59,7 @@ export type Database = {
           id?: string
           margin_pct?: number
           min_qty?: number
+          mrp?: number
           name: string
           selling_price?: number
           stock_qty?: number
@@ -74,6 +76,7 @@ export type Database = {
           id?: string
           margin_pct?: number
           min_qty?: number
+          mrp?: number
           name?: string
           selling_price?: number
           stock_qty?: number

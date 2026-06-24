@@ -25,6 +25,7 @@ type Product = {
   category_id: string | null;
   unit: string;
   cost_price: number;
+  mrp: number;
   margin_pct: number;
   selling_price: number;
   tax_pct: number;
@@ -112,6 +113,7 @@ function ProductsPage() {
                 <th className="px-4 py-3 font-medium">Product</th>
                 <th className="px-4 py-3 font-medium">Barcode</th>
                 <th className="px-4 py-3 font-medium text-right">Cost</th>
+                <th className="px-4 py-3 font-medium text-right">MRP</th>
                 <th className="px-4 py-3 font-medium text-right">Margin %</th>
                 <th className="px-4 py-3 font-medium text-right">Selling</th>
                 <th className="px-4 py-3 font-medium text-right">GST %</th>
@@ -134,6 +136,7 @@ function ProductsPage() {
                     </td>
                     <td className="px-4 py-3 font-mono text-xs">{p.barcode || "—"}</td>
                     <td className="px-4 py-3 text-right">{inr(p.cost_price)}</td>
+                    <td className="px-4 py-3 text-right">{inr(p.mrp)}</td>
                     <td className="px-4 py-3 text-right">{num(p.margin_pct)}%</td>
                     <td className="px-4 py-3 text-right font-semibold">{inr(p.selling_price)}</td>
                     <td className="px-4 py-3 text-right">{num(p.tax_pct)}%</td>
@@ -155,7 +158,7 @@ function ProductsPage() {
                 );
               })}
               {!filtered.length && (
-                <tr><td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">No products yet. Add your first product to start billing.</td></tr>
+                <tr><td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">No products yet. Add your first product to start billing.</td></tr>
               )}
             </tbody>
           </table>
@@ -187,6 +190,7 @@ function ProductDialog({
   const [categoryId, setCategoryId] = useState<string>("");
   const [unit, setUnit] = useState("pcs");
   const [cost, setCost] = useState("0");
+  const [mrp, setMrp] = useState("0");
   const [margin, setMargin] = useState("0");
   const [selling, setSelling] = useState("0");
   const [tax, setTax] = useState("0");
@@ -200,12 +204,12 @@ function ProductDialog({
     if (editing) {
       setName(editing.name); setBarcode(editing.barcode ?? "");
       setCategoryId(editing.category_id ?? ""); setUnit(editing.unit);
-      setCost(String(editing.cost_price)); setMargin(String(editing.margin_pct));
+      setCost(String(editing.cost_price)); setMrp(String(editing.mrp ?? 0)); setMargin(String(editing.margin_pct));
       setSelling(String(editing.selling_price)); setTax(String(editing.tax_pct));
       setStock(String(editing.stock_qty)); setMinQ(String(editing.min_qty));
     } else {
       setName(""); setBarcode(""); setCategoryId(""); setUnit("pcs");
-      setCost("0"); setMargin("0"); setSelling("0"); setTax("0"); setStock("0"); setMinQ("0");
+      setCost("0"); setMrp("0"); setMargin("0"); setSelling("0"); setTax("0"); setStock("0"); setMinQ("0");
     }
   }, [open, editing]);
 
@@ -236,6 +240,7 @@ function ProductDialog({
         category_id: categoryId || null,
         unit: unit.trim() || "pcs",
         cost_price: Number(cost) || 0,
+        mrp: Number(mrp) || 0,
         margin_pct: Number(margin) || 0,
         selling_price: Number(selling) || 0,
         tax_pct: Number(tax) || 0,
@@ -303,6 +308,11 @@ function ProductDialog({
               <Input type="number" step="0.01" value={selling} onChange={(e) => onSelling(e.target.value)} />
             </div>
             <p className="col-span-3 text-xs text-muted-foreground">Edit any of these three — the others recalculate automatically.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>MRP</Label>
+            <Input type="number" step="0.01" value={mrp} onChange={(e) => setMrp(e.target.value)} placeholder="Maximum retail price" />
           </div>
 
           <div className="space-y-1.5">
