@@ -120,6 +120,7 @@ function ProductsPage() {
                 <th className="px-4 py-3 font-medium text-right">GST %</th>
                 <th className="px-4 py-3 font-medium text-right">Stock</th>
                 <th className="px-4 py-3 font-medium text-right">Min</th>
+                <th className="px-4 py-3 font-medium text-right">Max</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -143,6 +144,7 @@ function ProductsPage() {
                     <td className="px-4 py-3 text-right">{num(p.tax_pct)}%</td>
                     <td className={`px-4 py-3 text-right ${low ? "text-warning-foreground font-medium" : ""}`}>{num(p.stock_qty)}</td>
                     <td className="px-4 py-3 text-right">{num(p.min_qty)}</td>
+                    <td className="px-4 py-3 text-right">{num(p.max_qty)}</td>
                     <td className="px-4 py-3 text-right">
                       {allowed && (
                         <div className="flex justify-end gap-1">
