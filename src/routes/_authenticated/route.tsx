@@ -6,14 +6,17 @@ import {
   ScanBarcode,
   Package,
   Receipt,
+  BarChart3,
   LogOut,
   Store,
   Menu,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useMyRoles } from "@/hooks/use-role";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -30,6 +33,7 @@ const nav = [
   { to: "/billing", label: "Billing", icon: ScanBarcode },
   { to: "/products", label: "Products", icon: Package },
   { to: "/sales", label: "Sales", icon: Receipt },
+  { to: "/reports", label: "Reports", icon: BarChart3 },
 ] as const;
 
 function AppShell() {
@@ -37,6 +41,29 @@ function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: roles } = useMyRoles();
   const [open, setOpen] = useState(false);
+
+  const lowStock = useQuery({
+    queryKey: ["low-stock-alert"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("id,name,stock_qty,min_qty")
+        .eq("active", true);
+      if (error) throw error;
+      return (data ?? []).filter((p) => Number(p.stock_qty) <= Number(p.min_qty));
+    },
+    refetchInterval: 60000,
+  });
+
+  useEffect(() => {
+    if (lowStock.data && lowStock.data.length > 0) {
+      toast.warning(`${lowStock.data.length} product(s) at or below minimum stock`, {
+        id: "low-stock",
+        description: lowStock.data.slice(0, 3).map((p) => p.name).join(", ") + (lowStock.data.length > 3 ? "…" : ""),
+        duration: 6000,
+      });
+    }
+  }, [lowStock.data]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
