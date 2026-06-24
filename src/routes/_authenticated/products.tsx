@@ -25,6 +25,7 @@ type Product = {
   category_id: string | null;
   unit: string;
   cost_price: number;
+  mrp: number;
   margin_pct: number;
   selling_price: number;
   tax_pct: number;
