@@ -392,41 +392,108 @@ function ProductPicker({
 }
 
 function CameraScanner({ open, onClose, onScan }: { open: boolean; onClose: () => void; onScan: (code: string) => void }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [deviceId, setDeviceId] = useState<string | undefined>(undefined);
+  const [manual, setManual] = useState("");
+
   useEffect(() => {
     if (!open) return;
-    let scanner: { stop: () => Promise<void>; clear: () => void } | null = null;
+    let controls: { stop: () => void } | null = null;
     let cancelled = false;
+
     (async () => {
-      const { Html5Qrcode } = await import("html5-qrcode");
-      if (cancelled) return;
-      const el = document.getElementById("scanner-region");
-      if (!el) return;
-      const s = new Html5Qrcode("scanner-region");
-      scanner = s as unknown as { stop: () => Promise<void>; clear: () => void };
       try {
-        await s.start(
-          { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 250, height: 150 } },
-          (decoded) => { onScan(decoded); s.stop().then(() => s.clear()).catch(() => {}); },
-          () => {},
+        if (!navigator.mediaDevices?.getUserMedia) {
+          toast.error("Camera not supported on this device");
+          return;
+        }
+        const { BrowserMultiFormatReader } = await import("@zxing/browser");
+        const { DecodeHintType, BarcodeFormat } = await import("@zxing/library");
+        const hints = new Map();
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+          BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+          BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.ITF, BarcodeFormat.CODABAR,
+          BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX,
+        ]);
+        hints.set(DecodeHintType.TRY_HARDER, true);
+        const reader = new BrowserMultiFormatReader(hints);
+
+        // Trigger permission prompt so device labels are available
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+          stream.getTracks().forEach((t) => t.stop());
+        } catch {
+          toast.error("Camera permission denied");
+          return;
+        }
+        const cams = await BrowserMultiFormatReader.listVideoInputDevices();
+        if (cancelled) return;
+        setDevices(cams);
+        const preferred = cams.find((c) => /back|rear|environment/i.test(c.label))?.deviceId
+          ?? deviceId
+          ?? cams[0]?.deviceId;
+        setDeviceId(preferred);
+        if (!videoRef.current) return;
+
+        controls = await reader.decodeFromVideoDevice(
+          preferred,
+          videoRef.current,
+          (result, _err, ctrl) => {
+            if (result) {
+              const text = result.getText();
+              ctrl.stop();
+              onScan(text);
+            }
+          },
         );
       } catch (e) {
+        console.error("scanner error", e);
         toast.error("Camera unavailable");
         onClose();
       }
     })();
+
     return () => {
       cancelled = true;
-      if (scanner) { scanner.stop().then(() => scanner?.clear()).catch(() => {}); }
+      controls?.stop();
     };
-  }, [open, onScan, onClose]);
+  }, [open, deviceId, onScan, onClose]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>Scan barcode</DialogTitle></DialogHeader>
-        <div id="scanner-region" className="w-full aspect-[4/3] bg-black rounded-md overflow-hidden" />
+        <div className="w-full aspect-[4/3] bg-black rounded-md overflow-hidden">
+          <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
+        </div>
+        {devices.length > 1 && (
+          <Select value={deviceId} onValueChange={setDeviceId}>
+            <SelectTrigger className="h-9"><SelectValue placeholder="Camera" /></SelectTrigger>
+            <SelectContent>
+              {devices.map((d) => (
+                <SelectItem key={d.deviceId} value={d.deviceId}>{d.label || `Camera ${d.deviceId.slice(0, 6)}`}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <p className="text-xs text-muted-foreground text-center">Point the camera at the barcode</p>
+        <div className="border-t pt-3 space-y-2">
+          <Label className="text-xs">Or enter barcode manually</Label>
+          <form
+            className="flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const code = manual.trim();
+              if (!code) return;
+              onScan(code);
+              setManual("");
+            }}
+          >
+            <Input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="Type or paste barcode" autoFocus={false} />
+            <Button type="submit">Add</Button>
+          </form>
+        </div>
       </DialogContent>
     </Dialog>
   );
