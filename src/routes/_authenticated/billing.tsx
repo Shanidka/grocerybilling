@@ -391,14 +391,32 @@ function ProductPicker({
   );
 }
 
+// Supported formats — broadened to cover retail 1D, postal, and 2D codes.
+const SUPPORTED_FORMAT_NAMES = [
+  "EAN_13", "EAN_8", "UPC_A", "UPC_E", "UPC_EAN_EXTENSION",
+  "CODE_128", "CODE_93", "CODE_39", "CODABAR", "ITF", "RSS_14", "RSS_EXPANDED",
+  "QR_CODE", "DATA_MATRIX", "AZTEC", "PDF_417", "MAXICODE",
+] as const;
+
+const FORMAT_LABEL: Record<string, string> = {
+  EAN_13: "EAN-13", EAN_8: "EAN-8", UPC_A: "UPC-A", UPC_E: "UPC-E", UPC_EAN_EXTENSION: "UPC/EAN ext.",
+  CODE_128: "Code 128", CODE_93: "Code 93", CODE_39: "Code 39", CODABAR: "Codabar", ITF: "ITF",
+  RSS_14: "GS1 DataBar", RSS_EXPANDED: "GS1 DataBar Exp.",
+  QR_CODE: "QR", DATA_MATRIX: "Data Matrix", AZTEC: "Aztec", PDF_417: "PDF417", MAXICODE: "MaxiCode",
+};
+
 function CameraScanner({ open, onClose, onScan }: { open: boolean; onClose: () => void; onScan: (code: string) => void }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [deviceId, setDeviceId] = useState<string | undefined>(undefined);
   const [manual, setManual] = useState("");
+  const [lastFormat, setLastFormat] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setLastFormat(null);
+      return;
+    }
     let controls: { stop: () => void } | null = null;
     let cancelled = false;
 
@@ -410,16 +428,14 @@ function CameraScanner({ open, onClose, onScan }: { open: boolean; onClose: () =
         }
         const { BrowserMultiFormatReader } = await import("@zxing/browser");
         const { DecodeHintType, BarcodeFormat } = await import("@zxing/library");
+        const formats = SUPPORTED_FORMAT_NAMES
+          .map((n) => (BarcodeFormat as unknown as Record<string, number>)[n])
+          .filter((v) => typeof v === "number");
         const hints = new Map();
-        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-          BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
-          BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.ITF, BarcodeFormat.CODABAR,
-          BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX,
-        ]);
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
         hints.set(DecodeHintType.TRY_HARDER, true);
         const reader = new BrowserMultiFormatReader(hints);
 
-        // Trigger permission prompt so device labels are available
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
           stream.getTracks().forEach((t) => t.stop());
@@ -442,6 +458,8 @@ function CameraScanner({ open, onClose, onScan }: { open: boolean; onClose: () =
           (result, _err, ctrl) => {
             if (result) {
               const text = result.getText();
+              const fmt = BarcodeFormat[result.getBarcodeFormat()] ?? "Unknown";
+              setLastFormat(fmt);
               ctrl.stop();
               onScan(text);
             }
@@ -464,8 +482,13 @@ function CameraScanner({ open, onClose, onScan }: { open: boolean; onClose: () =
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>Scan barcode</DialogTitle></DialogHeader>
-        <div className="w-full aspect-[4/3] bg-black rounded-md overflow-hidden">
+        <div className="w-full aspect-[4/3] bg-black rounded-md overflow-hidden relative">
           <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
+          {lastFormat && (
+            <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-primary-foreground text-xs font-medium">
+              {FORMAT_LABEL[lastFormat] ?? lastFormat}
+            </div>
+          )}
         </div>
         {devices.length > 1 && (
           <Select value={deviceId} onValueChange={setDeviceId}>
@@ -477,7 +500,23 @@ function CameraScanner({ open, onClose, onScan }: { open: boolean; onClose: () =
             </SelectContent>
           </Select>
         )}
-        <p className="text-xs text-muted-foreground text-center">Point the camera at the barcode</p>
+        <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground text-center">Point the camera at the barcode</p>
+          <div className="flex flex-wrap gap-1 justify-center">
+            {SUPPORTED_FORMAT_NAMES.map((f) => (
+              <span
+                key={f}
+                className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                  lastFormat === f
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border text-muted-foreground"
+                }`}
+              >
+                {FORMAT_LABEL[f] ?? f}
+              </span>
+            ))}
+          </div>
+        </div>
         <div className="border-t pt-3 space-y-2">
           <Label className="text-xs">Or enter barcode manually</Label>
           <form
