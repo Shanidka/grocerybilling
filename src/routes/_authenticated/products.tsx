@@ -198,8 +198,22 @@ function ProductsPage() {
         open={open}
         onOpenChange={setOpen}
         editing={editing}
+        prefillBarcode={prefillBarcode}
         categories={categories.data ?? []}
         onSaved={() => { qc.invalidateQueries({ queryKey: ["products"] }); qc.invalidateQueries({ queryKey: ["dashboard-stats"] }); }}
+      />
+
+      <BulkScanDialog
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        products={products.data ?? []}
+        onAddNew={(code) => {
+          setBulkOpen(false);
+          setEditing(null);
+          setPrefillBarcode(code);
+          setOpen(true);
+        }}
+        onStocked={() => qc.invalidateQueries({ queryKey: ["products"] })}
       />
     </div>
   );
