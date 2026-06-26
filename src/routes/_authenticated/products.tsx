@@ -75,10 +75,6 @@ function ProductsPage() {
       }
     },
   });
-      if (error) throw error;
-      return data as Product[];
-    },
-  });
 
   const categories = useQuery({
     queryKey: ["categories"],
