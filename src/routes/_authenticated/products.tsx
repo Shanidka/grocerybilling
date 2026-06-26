@@ -7,11 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Pencil, AlertTriangle, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Plus, Search, Pencil, AlertTriangle, Trash2, ScanBarcode, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { inr, num } from "@/lib/format";
 import { canManage, useMyRoles } from "@/hooks/use-role";
+import { CameraScanner } from "@/components/camera-scanner";
+
+const PRODUCTS_CACHE_KEY = "freshmart.products.cache.v1";
 
 export const Route = createFileRoute("/_authenticated/products")({
   component: ProductsPage,
