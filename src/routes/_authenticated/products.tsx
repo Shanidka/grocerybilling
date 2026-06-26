@@ -45,14 +45,36 @@ function ProductsPage() {
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<Product | null>(null);
   const [open, setOpen] = useState(false);
+  const [prefillBarcode, setPrefillBarcode] = useState<string>("");
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   const products = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
-        .order("name");
+      try {
+        const { data, error } = await supabase
+          .from("products")
+          .select("*")
+          .order("name");
+        if (error) throw error;
+        // Cache for offline
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(data)); } catch { /* ignore */ }
+        }
+        return data as Product[];
+      } catch (e) {
+        // Offline fallback
+        if (typeof window !== "undefined") {
+          const raw = localStorage.getItem(PRODUCTS_CACHE_KEY);
+          if (raw) {
+            toast.message("Offline — showing cached products");
+            return JSON.parse(raw) as Product[];
+          }
+        }
+        throw e;
+      }
+    },
+  });
       if (error) throw error;
       return data as Product[];
     },
