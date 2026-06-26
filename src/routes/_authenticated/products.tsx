@@ -220,11 +220,12 @@ function ProductsPage() {
 }
 
 function ProductDialog({
-  open, onOpenChange, editing, categories, onSaved,
+  open, onOpenChange, editing, prefillBarcode, categories, onSaved,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   editing: Product | null;
+  prefillBarcode?: string;
   categories: { id: string; name: string }[];
   onSaved: () => void;
 }) {
@@ -241,6 +242,7 @@ function ProductDialog({
   const [minQ, setMinQ] = useState("0");
   const [maxQ, setMaxQ] = useState("0");
   const [saving, setSaving] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
 
   // Reset form when dialog opens
   useMemo(() => {
@@ -252,10 +254,10 @@ function ProductDialog({
       setSelling(String(editing.selling_price)); setTax(String(editing.tax_pct));
       setStock(String(editing.stock_qty)); setMinQ(String(editing.min_qty)); setMaxQ(String(editing.max_qty ?? 0));
     } else {
-      setName(""); setBarcode(""); setCategoryId(""); setUnit("pcs");
+      setName(""); setBarcode(prefillBarcode ?? ""); setCategoryId(""); setUnit("pcs");
       setCost("0"); setMrp("0"); setMargin("0"); setSelling("0"); setTax("0"); setStock("0"); setMinQ("0"); setMaxQ("0");
     }
-  }, [open, editing]);
+  }, [open, editing, prefillBarcode]);
 
   // Two-way: margin <-> selling, anchored on cost
   const onCost = (v: string) => {
