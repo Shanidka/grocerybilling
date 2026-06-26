@@ -20,16 +20,16 @@ export const FORMAT_LABEL: Record<string, string> = {
   QR_CODE: "QR", DATA_MATRIX: "Data Matrix", AZTEC: "Aztec", PDF_417: "PDF417", MAXICODE: "MaxiCode",
 };
 
-type Props = {
-  open: boolean;
-  onClose: () => void;
+type ScannerProps = {
+  /** active=false stops the camera */
+  active: boolean;
   onScan: (code: string, format: string) => void;
-  /** If true, scanner does NOT auto-close after a hit — used for bulk mode */
+  /** If true, scanner keeps running after a hit — for bulk mode */
   continuous?: boolean;
-  title?: string;
+  onCameraError?: () => void;
 };
 
-export function CameraScanner({ open, onClose, onScan, continuous, title }: Props) {
+export function ScannerPanel({ active, onScan, continuous, onCameraError }: ScannerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [deviceId, setDeviceId] = useState<string | undefined>(undefined);
@@ -39,7 +39,7 @@ export function CameraScanner({ open, onClose, onScan, continuous, title }: Prop
   const lastHitRef = useRef<{ code: string; t: number } | null>(null);
 
   useEffect(() => {
-    if (!open) {
+    if (!active) {
       setLastFormat(null);
       setLastCode(null);
       lastHitRef.current = null;
@@ -69,6 +69,7 @@ export function CameraScanner({ open, onClose, onScan, continuous, title }: Prop
           stream.getTracks().forEach((t) => t.stop());
         } catch {
           toast.error("Camera permission denied");
+          onCameraError?.();
           return;
         }
         const cams = await BrowserMultiFormatReader.listVideoInputDevices();
@@ -88,7 +89,6 @@ export function CameraScanner({ open, onClose, onScan, continuous, title }: Prop
             const text = result.getText();
             const fmt = BarcodeFormat[result.getBarcodeFormat()] ?? "Unknown";
             const now = Date.now();
-            // Debounce repeats of same code within 1.5s — prevents duplicate hits in bulk mode
             if (lastHitRef.current && lastHitRef.current.code === text && now - lastHitRef.current.t < 1500) return;
             lastHitRef.current = { code: text, t: now };
             setLastFormat(fmt);
@@ -100,7 +100,7 @@ export function CameraScanner({ open, onClose, onScan, continuous, title }: Prop
       } catch (e) {
         console.error("scanner error", e);
         toast.error("Camera unavailable");
-        onClose();
+        onCameraError?.();
       }
     })();
 
@@ -108,55 +108,80 @@ export function CameraScanner({ open, onClose, onScan, continuous, title }: Prop
       cancelled = true;
       controls?.stop();
     };
-  }, [open, deviceId, onScan, onClose, continuous]);
+  }, [active, deviceId, onScan, onCameraError, continuous]);
 
+  return (
+    <div className="space-y-3">
+      <div className="w-full aspect-[4/3] bg-black rounded-md overflow-hidden relative">
+        <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
+        {lastFormat && (
+          <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-primary-foreground text-xs font-medium">
+            {FORMAT_LABEL[lastFormat] ?? lastFormat}
+          </div>
+        )}
+        {continuous && lastCode && (
+          <div className="absolute bottom-2 left-2 right-2 px-2 py-1 rounded bg-black/70 text-white text-xs font-mono truncate">
+            ✓ {lastCode}
+          </div>
+        )}
+      </div>
+      {devices.length > 1 && (
+        <Select value={deviceId} onValueChange={setDeviceId}>
+          <SelectTrigger className="h-9"><SelectValue placeholder="Camera" /></SelectTrigger>
+          <SelectContent>
+            {devices.map((d) => (
+              <SelectItem key={d.deviceId} value={d.deviceId}>{d.label || `Camera ${d.deviceId.slice(0, 6)}`}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      <p className="text-xs text-muted-foreground text-center">
+        {continuous ? "Keep scanning — each new code is captured" : "Point the camera at the barcode"}
+      </p>
+      <div className="border-t pt-3 space-y-2">
+        <Label className="text-xs">Or enter barcode manually</Label>
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const code = manual.trim();
+            if (!code) return;
+            onScan(code, "MANUAL");
+            setManual("");
+          }}
+        >
+          <Input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="Type or paste barcode" />
+          <Button type="submit">Add</Button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+type Props = {
+  open: boolean;
+  onClose: () => void;
+  onScan: (code: string, format: string) => void;
+  continuous?: boolean;
+  title?: string;
+};
+
+export function CameraScanner({ open, onClose, onScan, continuous, title }: Props) {
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>{title ?? "Scan barcode"}</DialogTitle></DialogHeader>
-        <div className="w-full aspect-[4/3] bg-black rounded-md overflow-hidden relative">
-          <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
-          {lastFormat && (
-            <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-primary-foreground text-xs font-medium">
-              {FORMAT_LABEL[lastFormat] ?? lastFormat}
-            </div>
-          )}
-          {continuous && lastCode && (
-            <div className="absolute bottom-2 left-2 right-2 px-2 py-1 rounded bg-black/70 text-white text-xs font-mono truncate">
-              ✓ {lastCode}
-            </div>
-          )}
-        </div>
-        {devices.length > 1 && (
-          <Select value={deviceId} onValueChange={setDeviceId}>
-            <SelectTrigger className="h-9"><SelectValue placeholder="Camera" /></SelectTrigger>
-            <SelectContent>
-              {devices.map((d) => (
-                <SelectItem key={d.deviceId} value={d.deviceId}>{d.label || `Camera ${d.deviceId.slice(0, 6)}`}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        <p className="text-xs text-muted-foreground text-center">
-          {continuous ? "Keep scanning — each new code is captured below" : "Point the camera at the barcode"}
-        </p>
-        <div className="border-t pt-3 space-y-2">
-          <Label className="text-xs">Or enter barcode manually</Label>
-          <form
-            className="flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const code = manual.trim();
-              if (!code) return;
-              onScan(code, "MANUAL");
-              setManual("");
-            }}
-          >
-            <Input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="Type or paste barcode" />
-            <Button type="submit">Add</Button>
-          </form>
-        </div>
+        <ScannerPanel
+          active={open}
+          continuous={continuous}
+          onCameraError={onClose}
+          onScan={(code, fmt) => {
+            if (!continuous) onClose();
+            onScan(code, fmt);
+          }}
+        />
       </DialogContent>
     </Dialog>
   );
 }
+
