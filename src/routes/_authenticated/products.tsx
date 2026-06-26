@@ -451,7 +451,7 @@ function BulkScanDialog({
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <InlineScanner onScan={handleScan} />
+            <ScannerPanel active={open} continuous onScan={handleScan} onCameraError={onClose} />
           </div>
           <div className="space-y-2 max-h-[60vh] overflow-y-auto">
             <div className="text-xs text-muted-foreground">Scanned ({items.length})</div>
