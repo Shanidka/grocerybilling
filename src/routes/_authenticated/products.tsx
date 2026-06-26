@@ -389,6 +389,113 @@ function ProductDialog({
           <Button onClick={save} disabled={saving}>{editing ? "Save changes" : "Add product"}</Button>
         </DialogFooter>
       </DialogContent>
+      <CameraScanner
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        onScan={(code) => { setBarcode(code); setScanOpen(false); toast.success(`Barcode: ${code}`); }}
+        title="Scan product barcode"
+      />
     </Dialog>
   );
 }
+
+function BulkScanDialog({
+  open, onClose, products, onAddNew, onStocked,
+}: {
+  open: boolean;
+  onClose: () => void;
+  products: Product[];
+  onAddNew: (code: string) => void;
+  onStocked: () => void;
+}) {
+  const [items, setItems] = useState<Array<{ code: string; format: string; count: number; product: Product | null }>>([]);
+
+  useEffect(() => {
+    if (!open) setItems([]);
+  }, [open]);
+
+  const byBarcode = useMemo(() => {
+    const m = new Map<string, Product>();
+    for (const p of products) if (p.barcode) m.set(p.barcode, p);
+    return m;
+  }, [products]);
+
+  const handleScan = (code: string, format: string) => {
+    setItems((prev) => {
+      const idx = prev.findIndex((i) => i.code === code);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], count: next[idx].count + 1 };
+        return next;
+      }
+      return [{ code, format, count: 1, product: byBarcode.get(code) ?? null }, ...prev];
+    });
+  };
+
+  const commitStock = async (code: string, addQty: number) => {
+    const p = byBarcode.get(code);
+    if (!p) return;
+    const newQty = Number(p.stock_qty) + addQty;
+    const { error } = await supabase.from("products").update({ stock_qty: newQty }).eq("id", p.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`${p.name}: stock +${addQty}`);
+    setItems((prev) => prev.filter((i) => i.code !== code));
+    onStocked();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Bulk scan</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <InlineScanner onScan={handleScan} />
+          </div>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            <div className="text-xs text-muted-foreground">Scanned ({items.length})</div>
+            {items.length === 0 && (
+              <div className="text-sm text-muted-foreground border rounded-md p-6 text-center">
+                Point the camera at barcodes. Each new code appears here.
+              </div>
+            )}
+            {items.map((it) => (
+              <div key={it.code} className="border rounded-md p-2.5 flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="font-mono text-xs truncate">{it.code}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {it.product ? it.product.name : "New product"} · scanned ×{it.count}
+                  </div>
+                </div>
+                {it.product ? (
+                  <Button size="sm" onClick={() => commitStock(it.code, it.count)}>
+                    +{it.count} stock
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={() => onAddNew(it.code)}>
+                    Add new
+                  </Button>
+                )}
+                <Button size="icon" variant="ghost" onClick={() => setItems((p) => p.filter((i) => i.code !== it.code))}>
+                  <X className="size-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Done</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InlineScanner({ onScan }: { onScan: (code: string, format: string) => void }) {
+  // Reuse CameraScanner by mounting as an always-open continuous panel inside the dialog.
+  return (
+    <CameraScanner open={true} onClose={() => {}} onScan={onScan} continuous title="Scanner" />
+  );
+}
+
