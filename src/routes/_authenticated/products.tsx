@@ -492,10 +492,4 @@ function BulkScanDialog({
   );
 }
 
-function InlineScanner({ onScan }: { onScan: (code: string, format: string) => void }) {
-  // Reuse CameraScanner by mounting as an always-open continuous panel inside the dialog.
-  return (
-    <CameraScanner open={true} onClose={() => {}} onScan={onScan} continuous title="Scanner" />
-  );
-}
 
