@@ -7,11 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Pencil, AlertTriangle, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Plus, Search, Pencil, AlertTriangle, Trash2, ScanBarcode, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { inr, num } from "@/lib/format";
 import { canManage, useMyRoles } from "@/hooks/use-role";
+import { CameraScanner, ScannerPanel } from "@/components/camera-scanner";
+
+const PRODUCTS_CACHE_KEY = "freshmart.products.cache.v1";
 
 export const Route = createFileRoute("/_authenticated/products")({
   component: ProductsPage,
@@ -42,16 +45,34 @@ function ProductsPage() {
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<Product | null>(null);
   const [open, setOpen] = useState(false);
+  const [prefillBarcode, setPrefillBarcode] = useState<string>("");
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   const products = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
-        .order("name");
-      if (error) throw error;
-      return data as Product[];
+      try {
+        const { data, error } = await supabase
+          .from("products")
+          .select("*")
+          .order("name");
+        if (error) throw error;
+        // Cache for offline
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(data)); } catch { /* ignore */ }
+        }
+        return data as Product[];
+      } catch (e) {
+        // Offline fallback
+        if (typeof window !== "undefined") {
+          const raw = localStorage.getItem(PRODUCTS_CACHE_KEY);
+          if (raw) {
+            toast.message("Offline — showing cached products");
+            return JSON.parse(raw) as Product[];
+          }
+        }
+        throw e;
+      }
     },
   });
 
@@ -93,9 +114,14 @@ function ProductsPage() {
           <p className="text-muted-foreground text-sm">Manage catalog, pricing & stock</p>
         </div>
         {allowed && (
-          <Button onClick={() => { setEditing(null); setOpen(true); }}>
-            <Plus className="size-4 mr-1.5" /> Add product
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setBulkOpen(true)}>
+              <ScanBarcode className="size-4 mr-1.5" /> Bulk scan
+            </Button>
+            <Button onClick={() => { setEditing(null); setPrefillBarcode(""); setOpen(true); }}>
+              <Plus className="size-4 mr-1.5" /> Add product
+            </Button>
+          </div>
         )}
       </div>
 
@@ -172,19 +198,34 @@ function ProductsPage() {
         open={open}
         onOpenChange={setOpen}
         editing={editing}
+        prefillBarcode={prefillBarcode}
         categories={categories.data ?? []}
         onSaved={() => { qc.invalidateQueries({ queryKey: ["products"] }); qc.invalidateQueries({ queryKey: ["dashboard-stats"] }); }}
+      />
+
+      <BulkScanDialog
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        products={products.data ?? []}
+        onAddNew={(code) => {
+          setBulkOpen(false);
+          setEditing(null);
+          setPrefillBarcode(code);
+          setOpen(true);
+        }}
+        onStocked={() => qc.invalidateQueries({ queryKey: ["products"] })}
       />
     </div>
   );
 }
 
 function ProductDialog({
-  open, onOpenChange, editing, categories, onSaved,
+  open, onOpenChange, editing, prefillBarcode, categories, onSaved,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   editing: Product | null;
+  prefillBarcode?: string;
   categories: { id: string; name: string }[];
   onSaved: () => void;
 }) {
@@ -201,6 +242,7 @@ function ProductDialog({
   const [minQ, setMinQ] = useState("0");
   const [maxQ, setMaxQ] = useState("0");
   const [saving, setSaving] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
 
   // Reset form when dialog opens
   useMemo(() => {
@@ -212,10 +254,10 @@ function ProductDialog({
       setSelling(String(editing.selling_price)); setTax(String(editing.tax_pct));
       setStock(String(editing.stock_qty)); setMinQ(String(editing.min_qty)); setMaxQ(String(editing.max_qty ?? 0));
     } else {
-      setName(""); setBarcode(""); setCategoryId(""); setUnit("pcs");
+      setName(""); setBarcode(prefillBarcode ?? ""); setCategoryId(""); setUnit("pcs");
       setCost("0"); setMrp("0"); setMargin("0"); setSelling("0"); setTax("0"); setStock("0"); setMinQ("0"); setMaxQ("0");
     }
-  }, [open, editing]);
+  }, [open, editing, prefillBarcode]);
 
   // Two-way: margin <-> selling, anchored on cost
   const onCost = (v: string) => {
@@ -283,7 +325,12 @@ function ProductDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Barcode (optional)</Label>
-            <Input value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="Scan or type" />
+            <div className="flex gap-2">
+              <Input value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="Scan or type" />
+              <Button type="button" variant="outline" size="icon" onClick={() => setScanOpen(true)} title="Scan with camera">
+                <ScanBarcode className="size-4" />
+              </Button>
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label>Unit</Label>
@@ -342,6 +389,107 @@ function ProductDialog({
           <Button onClick={save} disabled={saving}>{editing ? "Save changes" : "Add product"}</Button>
         </DialogFooter>
       </DialogContent>
+      <CameraScanner
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        onScan={(code) => { setBarcode(code); setScanOpen(false); toast.success(`Barcode: ${code}`); }}
+        title="Scan product barcode"
+      />
     </Dialog>
   );
 }
+
+function BulkScanDialog({
+  open, onClose, products, onAddNew, onStocked,
+}: {
+  open: boolean;
+  onClose: () => void;
+  products: Product[];
+  onAddNew: (code: string) => void;
+  onStocked: () => void;
+}) {
+  const [items, setItems] = useState<Array<{ code: string; format: string; count: number; product: Product | null }>>([]);
+
+  useEffect(() => {
+    if (!open) setItems([]);
+  }, [open]);
+
+  const byBarcode = useMemo(() => {
+    const m = new Map<string, Product>();
+    for (const p of products) if (p.barcode) m.set(p.barcode, p);
+    return m;
+  }, [products]);
+
+  const handleScan = (code: string, format: string) => {
+    setItems((prev) => {
+      const idx = prev.findIndex((i) => i.code === code);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], count: next[idx].count + 1 };
+        return next;
+      }
+      return [{ code, format, count: 1, product: byBarcode.get(code) ?? null }, ...prev];
+    });
+  };
+
+  const commitStock = async (code: string, addQty: number) => {
+    const p = byBarcode.get(code);
+    if (!p) return;
+    const newQty = Number(p.stock_qty) + addQty;
+    const { error } = await supabase.from("products").update({ stock_qty: newQty }).eq("id", p.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`${p.name}: stock +${addQty}`);
+    setItems((prev) => prev.filter((i) => i.code !== code));
+    onStocked();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Bulk scan</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <ScannerPanel active={open} continuous onScan={handleScan} onCameraError={onClose} />
+          </div>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            <div className="text-xs text-muted-foreground">Scanned ({items.length})</div>
+            {items.length === 0 && (
+              <div className="text-sm text-muted-foreground border rounded-md p-6 text-center">
+                Point the camera at barcodes. Each new code appears here.
+              </div>
+            )}
+            {items.map((it) => (
+              <div key={it.code} className="border rounded-md p-2.5 flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="font-mono text-xs truncate">{it.code}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {it.product ? it.product.name : "New product"} · scanned ×{it.count}
+                  </div>
+                </div>
+                {it.product ? (
+                  <Button size="sm" onClick={() => commitStock(it.code, it.count)}>
+                    +{it.count} stock
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={() => onAddNew(it.code)}>
+                    Add new
+                  </Button>
+                )}
+                <Button size="icon" variant="ghost" onClick={() => setItems((p) => p.filter((i) => i.code !== it.code))}>
+                  <X className="size-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Done</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
