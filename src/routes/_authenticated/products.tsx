@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { inr, num } from "@/lib/format";
 import { canManage, useMyRoles } from "@/hooks/use-role";
-import { CameraScanner } from "@/components/camera-scanner";
+import { CameraScanner, ScannerPanel } from "@/components/camera-scanner";
 
 const PRODUCTS_CACHE_KEY = "freshmart.products.cache.v1";
 
