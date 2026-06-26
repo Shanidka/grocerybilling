@@ -114,9 +114,14 @@ function ProductsPage() {
           <p className="text-muted-foreground text-sm">Manage catalog, pricing & stock</p>
         </div>
         {allowed && (
-          <Button onClick={() => { setEditing(null); setOpen(true); }}>
-            <Plus className="size-4 mr-1.5" /> Add product
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setBulkOpen(true)}>
+              <ScanBarcode className="size-4 mr-1.5" /> Bulk scan
+            </Button>
+            <Button onClick={() => { setEditing(null); setPrefillBarcode(""); setOpen(true); }}>
+              <Plus className="size-4 mr-1.5" /> Add product
+            </Button>
+          </div>
         )}
       </div>
 
