@@ -325,7 +325,12 @@ function ProductDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Barcode (optional)</Label>
-            <Input value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="Scan or type" />
+            <div className="flex gap-2">
+              <Input value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="Scan or type" />
+              <Button type="button" variant="outline" size="icon" onClick={() => setScanOpen(true)} title="Scan with camera">
+                <ScanBarcode className="size-4" />
+              </Button>
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label>Unit</Label>
