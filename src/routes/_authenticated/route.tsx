@@ -1,17 +1,7 @@
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  LayoutDashboard,
-  ScanBarcode,
-  Package,
-  Receipt,
-  BarChart3,
-  LogOut,
-  Store,
-  Menu,
-  X,
-} from "lucide-react";
+import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useMyRoles } from "@/hooks/use-role";
@@ -31,9 +21,6 @@ export const Route = createFileRoute("/_authenticated")({
 const nav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/billing", label: "Billing", icon: ScanBarcode },
-  { to: "/products", label: "Products", icon: Package },
-  { to: "/sales", label: "Sales", icon: Receipt },
-  { to: "/reports", label: "Reports", icon: BarChart3 },
 ] as const;
 
 function AppShell() {
@@ -41,29 +28,37 @@ function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: roles } = useMyRoles();
   const [open, setOpen] = useState(false);
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
 
-  const lowStock = useQuery({
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+
+  // Low stock toast
+  useQuery({
     queryKey: ["low-stock-alert"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
         .select("id,name,stock_qty,min_qty")
-        .eq("active", true);
+        .eq("is_active", true);
       if (error) throw error;
-      return (data ?? []).filter((p) => Number(p.stock_qty) <= Number(p.min_qty));
+      const low = (data ?? []).filter((p) => Number(p.stock_qty) <= Number(p.min_qty) && Number(p.min_qty) > 0);
+      if (low.length > 0) {
+        toast.warning(`${low.length} product(s) at or below minimum stock`, {
+          id: "low-stock",
+          description: low.slice(0, 3).map((p) => p.name).join(", ") + (low.length > 3 ? "…" : ""),
+          duration: 6000,
+        });
+      }
+      return low;
     },
     refetchInterval: 60000,
   });
-
-  useEffect(() => {
-    if (lowStock.data && lowStock.data.length > 0) {
-      toast.warning(`${lowStock.data.length} product(s) at or below minimum stock`, {
-        id: "low-stock",
-        description: lowStock.data.slice(0, 3).map((p) => p.name).join(", ") + (lowStock.data.length > 3 ? "…" : ""),
-        duration: 6000,
-      });
-    }
-  }, [lowStock.data]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -72,18 +67,17 @@ function AppShell() {
 
   return (
     <div className="min-h-screen flex bg-background text-foreground">
-      {/* Sidebar */}
       <aside
         className={`fixed lg:static inset-y-0 left-0 z-40 w-64 bg-sidebar text-sidebar-foreground flex flex-col transform transition-transform ${
           open ? "translate-x-0" : "-translate-x-full"
         } lg:translate-x-0`}
       >
         <div className="px-5 py-5 flex items-center gap-2 border-b border-sidebar-border">
-          <div className="size-9 rounded-lg bg-sidebar-primary text-sidebar-primary-foreground grid place-items-center">
-            <Store className="size-5" />
+          <div className="size-10 rounded-xl bg-sidebar-primary text-sidebar-primary-foreground grid place-items-center">
+            <ShoppingCart className="size-5" />
           </div>
           <div>
-            <div className="font-semibold leading-tight">FreshMart POS</div>
+            <div className="font-semibold leading-tight">Bazaar POS</div>
             <div className="text-xs text-sidebar-foreground/60">Supermarket billing</div>
           </div>
         </div>
@@ -107,10 +101,19 @@ function AppShell() {
               </Link>
             );
           })}
+          <div className="mt-4 px-3 text-[10px] uppercase tracking-wider text-sidebar-foreground/40">Coming next</div>
+          {["Products", "Inventory", "Reports", "Expiry", "Dead stock"].map((l) => (
+            <div key={l} className="px-3 py-2 text-sm text-sidebar-foreground/40 cursor-not-allowed">{l}</div>
+          ))}
         </nav>
         <div className="p-3 border-t border-sidebar-border space-y-2">
+          {!online && (
+            <div className="px-3 py-1.5 rounded-md bg-warning/20 text-warning text-xs flex items-center gap-2">
+              <WifiOff className="size-3" /> Offline mode
+            </div>
+          )}
           <div className="px-3 py-2 text-xs text-sidebar-foreground/60">
-            Role: <span className="text-sidebar-foreground">{roles?.[0] ?? "—"}</span>
+            Role: <span className="text-sidebar-foreground capitalize">{roles?.[0] ?? "—"}</span>
           </div>
           <button
             onClick={signOut}
@@ -121,17 +124,14 @@ function AppShell() {
         </div>
       </aside>
 
-      {open && (
-        <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setOpen(false)} />
-      )}
+      {open && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setOpen(false)} />}
 
-      {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="lg:hidden h-14 px-4 flex items-center gap-3 border-b bg-surface">
           <Button variant="ghost" size="icon" onClick={() => setOpen((v) => !v)}>
             {open ? <X className="size-5" /> : <Menu className="size-5" />}
           </Button>
-          <div className="font-semibold">FreshMart POS</div>
+          <div className="font-semibold">Bazaar POS</div>
         </header>
         <main className="flex-1 overflow-auto">
           <Outlet />
