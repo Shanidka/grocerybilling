@@ -156,7 +156,7 @@ function Billing() {
     const { error } = await supabase.from("held_bills").insert({
       cashier_id: u.user.id,
       label: customerName || `Bill ${new Date().toLocaleTimeString()}`,
-      cart: cart as unknown as object,
+      cart: cart as unknown as never,
       customer_name: customerName || null,
       customer_phone: customerPhone || null,
       bill_discount: billDiscount,
