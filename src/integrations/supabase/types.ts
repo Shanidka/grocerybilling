@@ -32,19 +32,57 @@ export type Database = {
         }
         Relationships: []
       }
+      held_bills: {
+        Row: {
+          bill_discount: number
+          cart: Json
+          cashier_id: string
+          created_at: string
+          customer_name: string | null
+          customer_phone: string | null
+          id: string
+          label: string | null
+        }
+        Insert: {
+          bill_discount?: number
+          cart: Json
+          cashier_id: string
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          label?: string | null
+        }
+        Update: {
+          bill_discount?: number
+          cart?: Json
+          cashier_id?: string
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          label?: string | null
+        }
+        Relationships: []
+      }
       products: {
         Row: {
-          active: boolean
           barcode: string | null
+          brand: string | null
           category_id: string | null
-          cost_price: number
           created_at: string
+          expiry_date: string | null
           id: string
+          image_url: string | null
+          is_active: boolean
+          last_sold_at: string | null
           margin_pct: number
           max_qty: number
+          mfg_date: string | null
           min_qty: number
           mrp: number
           name: string
+          purchase_price: number
           selling_price: number
           stock_qty: number
           tax_pct: number
@@ -52,17 +90,22 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          active?: boolean
           barcode?: string | null
+          brand?: string | null
           category_id?: string | null
-          cost_price?: number
           created_at?: string
+          expiry_date?: string | null
           id?: string
+          image_url?: string | null
+          is_active?: boolean
+          last_sold_at?: string | null
           margin_pct?: number
           max_qty?: number
+          mfg_date?: string | null
           min_qty?: number
           mrp?: number
           name: string
+          purchase_price?: number
           selling_price?: number
           stock_qty?: number
           tax_pct?: number
@@ -70,17 +113,22 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          active?: boolean
           barcode?: string | null
+          brand?: string | null
           category_id?: string | null
-          cost_price?: number
           created_at?: string
+          expiry_date?: string | null
           id?: string
+          image_url?: string | null
+          is_active?: boolean
+          last_sold_at?: string | null
           margin_pct?: number
           max_qty?: number
+          mfg_date?: string | null
           min_qty?: number
           mrp?: number
           name?: string
+          purchase_price?: number
           selling_price?: number
           stock_qty?: number
           tax_pct?: number
@@ -102,16 +150,22 @@ export type Database = {
           created_at: string
           full_name: string | null
           id: string
+          phone: string | null
+          updated_at: string
         }
         Insert: {
           created_at?: string
           full_name?: string | null
           id: string
+          phone?: string | null
+          updated_at?: string
         }
         Update: {
           created_at?: string
           full_name?: string | null
           id?: string
+          phone?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -121,8 +175,8 @@ export type Database = {
           id: string
           line_discount: number
           line_total: number
+          name: string
           product_id: string | null
-          product_name: string
           qty: number
           sale_id: string
           tax_pct: number
@@ -133,8 +187,8 @@ export type Database = {
           id?: string
           line_discount?: number
           line_total: number
+          name: string
           product_id?: string | null
-          product_name: string
           qty: number
           sale_id: string
           tax_pct?: number
@@ -145,8 +199,8 @@ export type Database = {
           id?: string
           line_discount?: number
           line_total?: number
+          name?: string
           product_id?: string | null
-          product_name?: string
           qty?: number
           sale_id?: string
           tax_pct?: number
@@ -174,27 +228,35 @@ export type Database = {
           bill_discount: number
           bill_no: string
           cashier_id: string
+          change_amount: number
           created_at: string
           customer_name: string | null
           customer_phone: string | null
-          discount_total: number
           grand_total: number
           id: string
+          line_discount: number
+          notes: string | null
+          paid_amount: number
           payment_mode: string
+          status: string
           subtotal: number
           tax_total: number
         }
         Insert: {
           bill_discount?: number
-          bill_no?: string
+          bill_no: string
           cashier_id: string
+          change_amount?: number
           created_at?: string
           customer_name?: string | null
           customer_phone?: string | null
-          discount_total?: number
           grand_total?: number
           id?: string
+          line_discount?: number
+          notes?: string | null
+          paid_amount?: number
           payment_mode?: string
+          status?: string
           subtotal?: number
           tax_total?: number
         }
@@ -202,13 +264,17 @@ export type Database = {
           bill_discount?: number
           bill_no?: string
           cashier_id?: string
+          change_amount?: number
           created_at?: string
           customer_name?: string | null
           customer_phone?: string | null
-          discount_total?: number
           grand_total?: number
           id?: string
+          line_discount?: number
+          notes?: string | null
+          paid_amount?: number
           payment_mode?: string
+          status?: string
           subtotal?: number
           tax_total?: number
         }
@@ -247,6 +313,8 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_staff: { Args: { _user_id: string }; Returns: boolean }
+      next_bill_no: { Args: never; Returns: string }
     }
     Enums: {
       app_role: "admin" | "manager" | "cashier"
