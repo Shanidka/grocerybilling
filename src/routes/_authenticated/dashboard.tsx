@@ -1,93 +1,106 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
-import { AlertTriangle, IndianRupee, Package, Receipt, ArrowRight } from "lucide-react";
-import { inr, num } from "@/lib/format";
+import { Button } from "@/components/ui/button";
+import { inr } from "@/lib/format";
+import { ScanBarcode, AlertTriangle, CalendarClock, Boxes, IndianRupee, Receipt } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
+  ssr: false,
   component: Dashboard,
-  head: () => ({ meta: [{ title: "Dashboard — FreshMart POS" }] }),
+  head: () => ({ meta: [{ title: "Dashboard — Bazaar POS" }] }),
 });
 
 function Dashboard() {
-  const stats = useQuery({
-    queryKey: ["dashboard-stats"],
+  const today = useQuery({
+    queryKey: ["dash-today"],
     queryFn: async () => {
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const [salesToday, lowStock, productCount, recentSales] = await Promise.all([
-        supabase.from("sales").select("grand_total").gte("created_at", today.toISOString()),
-        supabase.from("products").select("id,name,stock_qty,min_qty,unit").eq("active", true),
-        supabase.from("products").select("id", { count: "exact", head: true }).eq("active", true),
-        supabase.from("sales").select("id,bill_no,grand_total,created_at,payment_mode").order("created_at", { ascending: false }).limit(6),
-      ]);
-      const todayTotal = (salesToday.data ?? []).reduce((s, r) => s + Number(r.grand_total), 0);
-      const todayCount = salesToday.data?.length ?? 0;
-      const low = (lowStock.data ?? []).filter((p) => Number(p.stock_qty) <= Number(p.min_qty));
-      return {
-        todayTotal,
-        todayCount,
-        productCount: productCount.count ?? 0,
-        low,
-        recentSales: recentSales.data ?? [],
-      };
+      const start = new Date(); start.setHours(0, 0, 0, 0);
+      const { data, error } = await supabase
+        .from("sales")
+        .select("grand_total")
+        .gte("created_at", start.toISOString());
+      if (error) throw error;
+      const total = (data ?? []).reduce((s, r) => s + Number(r.grand_total), 0);
+      return { total, count: data?.length ?? 0 };
     },
-    refetchInterval: 30000,
   });
 
-  const s = stats.data;
+  const month = useQuery({
+    queryKey: ["dash-month"],
+    queryFn: async () => {
+      const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
+      const { data, error } = await supabase
+        .from("sales")
+        .select("grand_total")
+        .gte("created_at", start.toISOString());
+      if (error) throw error;
+      const total = (data ?? []).reduce((s, r) => s + Number(r.grand_total), 0);
+      return { total, count: data?.length ?? 0 };
+    },
+  });
+
+  const lowStock = useQuery({
+    queryKey: ["dash-low"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("id,name,stock_qty,min_qty")
+        .eq("is_active", true);
+      if (error) throw error;
+      return (data ?? []).filter((p) => Number(p.stock_qty) <= Number(p.min_qty) && Number(p.min_qty) > 0);
+    },
+  });
+
+  const expiring = useQuery({
+    queryKey: ["dash-expiring"],
+    queryFn: async () => {
+      const in30 = new Date(); in30.setDate(in30.getDate() + 30);
+      const { data, error } = await supabase
+        .from("products")
+        .select("id,name,expiry_date,stock_qty")
+        .eq("is_active", true)
+        .not("expiry_date", "is", null)
+        .lte("expiry_date", in30.toISOString().slice(0, 10));
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-semibold">Dashboard</h1>
-        <p className="text-muted-foreground text-sm">Today at a glance</p>
-      </div>
-
-      {s && s.low.length > 0 && (
-        <div className="rounded-xl border border-warning/40 bg-warning/15 p-4 flex items-start gap-3">
-          <AlertTriangle className="size-5 text-warning-foreground shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <div className="font-medium text-warning-foreground">
-              {s.low.length} product{s.low.length > 1 ? "s" : ""} at or below minimum stock
-            </div>
-            <div className="text-sm text-warning-foreground/80 mt-1">
-              Reorder soon — these will be auto-drafted once the distributor app is connected.
-            </div>
-          </div>
-          <Link to="/products" className="text-sm font-medium text-warning-foreground hover:underline flex items-center gap-1">
-            Review <ArrowRight className="size-3.5" />
-          </Link>
+    <div className="p-6 lg:p-8 space-y-6 max-w-7xl">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Quick snapshot of your store today.</p>
         </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard label="Today's sales" value={inr(s?.todayTotal ?? 0)} icon={IndianRupee} hint={`${s?.todayCount ?? 0} bills`} />
-        <StatCard label="Active products" value={num(s?.productCount ?? 0, 0)} icon={Package} />
-        <StatCard label="Low stock items" value={num(s?.low.length ?? 0, 0)} icon={AlertTriangle} tone={s && s.low.length > 0 ? "warn" : "default"} />
+        <Button asChild size="lg" className="h-11">
+          <Link to="/billing"><ScanBarcode className="size-4" /> New bill</Link>
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Stat icon={IndianRupee} label="Today's sales" value={inr(today.data?.total ?? 0)} sub={`${today.data?.count ?? 0} bills`} tone="primary" />
+        <Stat icon={Receipt} label="This month" value={inr(month.data?.total ?? 0)} sub={`${month.data?.count ?? 0} bills`} />
+        <Stat icon={AlertTriangle} label="Low stock" value={String(lowStock.data?.length ?? 0)} sub="products to reorder" tone="warning" />
+        <Stat icon={CalendarClock} label="Expiring ≤ 30d" value={String(expiring.data?.length ?? 0)} sub="check before sale" tone="warning" />
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-4">
         <Card className="p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold">Low stock alerts</h2>
-            <Link to="/products" className="text-xs text-primary hover:underline">Manage products</Link>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold">Low stock alerts</h3>
+            <span className="text-xs text-muted-foreground">{lowStock.data?.length ?? 0} items</span>
           </div>
-          {!s?.low.length ? (
-            <p className="text-sm text-muted-foreground">All stocked up. </p>
+          {!lowStock.data?.length ? (
+            <Empty msg="All products are above their minimum stock." />
           ) : (
             <ul className="divide-y">
-              {s.low.slice(0, 8).map((p) => (
-                <li key={p.id} className="py-2.5 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="font-medium truncate">{p.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Stock {num(p.stock_qty)} {p.unit} · min {num(p.min_qty)} {p.unit}
-                    </div>
-                  </div>
-                  <span className="text-xs px-2 py-1 rounded-md bg-warning/20 text-warning-foreground font-medium">
-                    Reorder
-                  </span>
+              {lowStock.data.slice(0, 8).map((p) => (
+                <li key={p.id} className="py-2 flex items-center justify-between text-sm">
+                  <span className="truncate">{p.name}</span>
+                  <span className="text-warning font-medium">{Number(p.stock_qty)} / min {Number(p.min_qty)}</span>
                 </li>
               ))}
             </ul>
@@ -95,51 +108,52 @@ function Dashboard() {
         </Card>
 
         <Card className="p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold">Recent bills</h2>
-            <Link to="/sales" className="text-xs text-primary hover:underline flex items-center gap-1"><Receipt className="size-3.5" /> All sales</Link>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold">Expiring soon</h3>
+            <span className="text-xs text-muted-foreground">next 30 days</span>
           </div>
-          {!s?.recentSales.length ? (
-            <p className="text-sm text-muted-foreground">No sales yet.</p>
+          {!expiring.data?.length ? (
+            <Empty msg="Nothing expiring in the next 30 days." />
           ) : (
             <ul className="divide-y">
-              {s.recentSales.map((b) => (
-                <li key={b.id} className="py-2.5 flex items-center justify-between text-sm">
-                  <div>
-                    <div className="font-medium">{b.bill_no}</div>
-                    <div className="text-xs text-muted-foreground">{new Date(b.created_at).toLocaleString("en-IN")}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-semibold">{inr(b.grand_total)}</div>
-                    <div className="text-xs text-muted-foreground capitalize">{b.payment_mode}</div>
-                  </div>
+              {expiring.data.slice(0, 8).map((p) => (
+                <li key={p.id} className="py-2 flex items-center justify-between text-sm">
+                  <span className="truncate">{p.name}</span>
+                  <span className="text-muted-foreground">exp {p.expiry_date}</span>
                 </li>
               ))}
             </ul>
           )}
         </Card>
       </div>
+
+      <Card className="p-5">
+        <div className="flex items-start gap-3">
+          <div className="size-9 rounded-lg bg-accent grid place-items-center"><Boxes className="size-4 text-accent-foreground" /></div>
+          <div>
+            <div className="font-medium">More modules are coming next.</div>
+            <div className="text-sm text-muted-foreground">Products, Inventory, Reports, Expiry tab, Dead stock tab — we'll build them screen by screen.</div>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
 
-function StatCard({
-  label, value, hint, icon: Icon, tone = "default",
-}: {
-  label: string; value: string; hint?: string;
-  icon: React.ComponentType<{ className?: string }>;
-  tone?: "default" | "warn";
-}) {
+function Stat({ icon: Icon, label, value, sub, tone }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string; sub: string; tone?: "primary" | "warning" }) {
+  const toneBg = tone === "primary" ? "bg-primary text-primary-foreground" : tone === "warning" ? "bg-warning text-warning-foreground" : "bg-secondary text-secondary-foreground";
   return (
-    <Card className="p-5 flex items-center gap-4 shadow-soft">
-      <div className={`size-11 rounded-lg grid place-items-center ${tone === "warn" ? "bg-warning/20 text-warning-foreground" : "bg-primary/10 text-primary"}`}>
-        <Icon className="size-5" />
+    <Card className="p-5">
+      <div className="flex items-center justify-between">
+        <div className={`size-10 rounded-xl grid place-items-center ${toneBg}`}><Icon className="size-5" /></div>
       </div>
-      <div>
-        <div className="text-xs text-muted-foreground">{label}</div>
-        <div className="text-2xl font-semibold leading-tight">{value}</div>
-        {hint && <div className="text-xs text-muted-foreground mt-0.5">{hint}</div>}
-      </div>
+      <div className="mt-4 text-2xl font-semibold tracking-tight">{value}</div>
+      <div className="text-sm text-muted-foreground">{label}</div>
+      <div className="text-xs text-muted-foreground/70 mt-0.5">{sub}</div>
     </Card>
   );
+}
+
+function Empty({ msg }: { msg: string }) {
+  return <div className="text-sm text-muted-foreground py-6 text-center">{msg}</div>;
 }

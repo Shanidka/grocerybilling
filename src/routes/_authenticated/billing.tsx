@@ -1,538 +1,576 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card } from "@/components/ui/card";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Minus, Trash2, ScanBarcode, Search, X, Receipt } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ScannerPanel } from "@/components/camera-scanner";
+import { CameraIcon, Plus, Minus, Trash2, Search, Pause, Play, Printer, IndianRupee, Loader2, ShoppingCart, QrCode } from "lucide-react";
 import { toast } from "sonner";
-import { inr, num } from "@/lib/format";
+import { inr } from "@/lib/format";
 import { generateReceipt } from "@/lib/receipt";
+import QRCode from "qrcode";
 
 export const Route = createFileRoute("/_authenticated/billing")({
-  component: BillingPage,
-  head: () => ({ meta: [{ title: "Billing — FreshMart POS" }] }),
+  ssr: false,
+  component: Billing,
+  head: () => ({ meta: [{ title: "Billing — Bazaar POS" }] }),
 });
 
 type Product = {
-  id: string; name: string; barcode: string | null;
-  unit: string; selling_price: number; tax_pct: number; stock_qty: number;
+  id: string; barcode: string | null; name: string; brand: string | null;
+  selling_price: number; mrp: number; tax_pct: number; stock_qty: number; unit: string;
 };
 
-type CartItem = {
-  product_id: string;
-  name: string;
-  qty: number;
-  unit_price: number;
-  tax_pct: number;
-  line_discount: number; // flat amount
+type CartLine = {
+  product_id: string; name: string; unit_price: number; qty: number;
+  tax_pct: number; discount: number; stock_qty: number;
 };
 
-function BillingPage() {
-  const [query, setQuery] = useState("");
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [billDiscount, setBillDiscount] = useState("0");
-  const [payment, setPayment] = useState("cash");
-  const [custName, setCustName] = useState("");
-  const [custPhone, setCustPhone] = useState("");
-  const [showPicker, setShowPicker] = useState(false);
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+const PAYMENT_MODES = [
+  { value: "cash", label: "Cash" },
+  { value: "card", label: "Card" },
+  { value: "upi", label: "UPI" },
+  { value: "qr", label: "QR" },
+];
 
-  const products = useQuery({
-    queryKey: ["products-pos"],
+function Billing() {
+  const qc = useQueryClient();
+  const [scanOpen, setScanOpen] = useState(false);
+  const [recallOpen, setRecallOpen] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const [billDiscount, setBillDiscount] = useState(0);
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const searchRef = useRef<HTMLInputElement | null>(null);
+
+  // Load products (cached for offline)
+  const productsQ = useQuery({
+    queryKey: ["billing-products"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
-        .select("id,name,barcode,unit,selling_price,tax_pct,stock_qty")
-        .eq("active", true)
+        .select("id,barcode,name,brand,selling_price,mrp,tax_pct,stock_qty,unit,is_active")
+        .eq("is_active", true)
         .order("name");
       if (error) throw error;
-      return data as Product[];
+      const list = (data ?? []) as unknown as Product[];
+      try { localStorage.setItem("bz_products", JSON.stringify(list)); } catch { /* ignore */ }
+      return list;
+    },
+    initialData: () => {
+      try {
+        const raw = localStorage.getItem("bz_products");
+        return raw ? (JSON.parse(raw) as Product[]) : undefined;
+      } catch { return undefined; }
+    },
+    staleTime: 30_000,
+  });
+
+  const products = productsQ.data ?? [];
+
+  // Held bills
+  const heldQ = useQuery({
+    queryKey: ["held-bills"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("held_bills")
+        .select("id,label,cart,customer_name,customer_phone,bill_discount,created_at")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
     },
   });
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  const searchResults = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return [];
+    return products.filter((p) =>
+      p.name.toLowerCase().includes(q) ||
+      (p.brand?.toLowerCase().includes(q) ?? false) ||
+      (p.barcode?.toLowerCase().includes(q) ?? false),
+    ).slice(0, 8);
+  }, [products, search]);
 
   const totals = useMemo(() => {
-    let subtotal = 0, taxTotal = 0, lineDiscount = 0;
-    for (const it of cart) {
-      const gross = it.qty * it.unit_price;
-      const afterDiscount = Math.max(0, gross - it.line_discount);
-      const tax = afterDiscount * (it.tax_pct / 100);
-      subtotal += afterDiscount;
-      taxTotal += tax;
-      lineDiscount += it.line_discount;
-    }
-    const billDisc = Number(billDiscount) || 0;
-    const grand = Math.max(0, subtotal + taxTotal - billDisc);
-    return { subtotal, taxTotal, lineDiscount, billDisc, grand };
+    const subtotal = cart.reduce((s, l) => s + l.unit_price * l.qty, 0);
+    const lineDisc = cart.reduce((s, l) => s + l.discount, 0);
+    const taxableBase = cart.reduce((s, l) => s + Math.max(0, l.unit_price * l.qty - l.discount), 0);
+    const taxTotal = cart.reduce((s, l) => {
+      const base = Math.max(0, l.unit_price * l.qty - l.discount);
+      return s + base * (l.tax_pct / 100);
+    }, 0);
+    const billDisc = Math.min(billDiscount, taxableBase + taxTotal);
+    const grand = Math.max(0, taxableBase + taxTotal - billDisc);
+    return { subtotal, lineDisc, taxTotal, billDisc, grand };
   }, [cart, billDiscount]);
 
-  const addProduct = (p: Product) => {
-    setCart((prev) => {
-      const i = prev.findIndex((x) => x.product_id === p.id);
+  const addProduct = (p: Product, qty = 1) => {
+    setCart((c) => {
+      const i = c.findIndex((l) => l.product_id === p.id);
       if (i >= 0) {
-        const c = [...prev];
-        c[i] = { ...c[i], qty: c[i].qty + 1 };
-        return c;
+        const next = [...c];
+        next[i] = { ...next[i], qty: next[i].qty + qty };
+        return next;
       }
       return [
-        ...prev,
+        ...c,
         {
-          product_id: p.id, name: p.name, qty: 1,
-          unit_price: Number(p.selling_price), tax_pct: Number(p.tax_pct), line_discount: 0,
+          product_id: p.id, name: p.name, unit_price: Number(p.selling_price),
+          qty, tax_pct: Number(p.tax_pct), discount: 0, stock_qty: Number(p.stock_qty),
         },
       ];
     });
   };
 
-  // Handle barcode/search: Enter triggers exact barcode match, else show picker
-  const onQuerySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const term = query.trim();
-    if (!term) return;
-    const list = products.data ?? [];
-    const exact = list.find((p) => p.barcode && p.barcode.toLowerCase() === term.toLowerCase());
-    if (exact) {
-      addProduct(exact);
-      setQuery("");
+  const handleScan = (code: string) => {
+    const p = products.find((x) => x.barcode === code);
+    if (!p) {
+      toast.error(`No product for ${code}`);
       return;
     }
-    const matches = list.filter(
-      (p) => p.name.toLowerCase().includes(term.toLowerCase()) || p.barcode?.toLowerCase().includes(term.toLowerCase()),
-    );
-    if (matches.length === 1) {
-      addProduct(matches[0]); setQuery(""); return;
-    }
-    if (matches.length === 0) {
-      toast.error("No product matches"); return;
-    }
-    setShowPicker(true);
+    addProduct(p);
+    toast.success(`Added ${p.name}`);
   };
 
-  const updateItem = (i: number, patch: Partial<CartItem>) =>
-    setCart((c) => c.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
-  const removeItem = (i: number) => setCart((c) => c.filter((_, idx) => idx !== i));
-
-  const submit = async () => {
-    if (!cart.length) { toast.error("Cart is empty"); return; }
-    setSubmitting(true);
-    try {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) throw new Error("Not signed in");
-      const { data: sale, error } = await supabase
-        .from("sales")
-        .insert({
-          cashier_id: u.user.id,
-          subtotal: round(totals.subtotal),
-          tax_total: round(totals.taxTotal),
-          discount_total: round(totals.lineDiscount),
-          bill_discount: round(totals.billDisc),
-          grand_total: round(totals.grand),
-          payment_mode: payment,
-          customer_name: custName.trim() || null,
-          customer_phone: custPhone.trim() || null,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      const items = cart.map((it) => {
-        const gross = it.qty * it.unit_price;
-        const afterDiscount = Math.max(0, gross - it.line_discount);
-        const tax = afterDiscount * (it.tax_pct / 100);
-        return {
-          sale_id: sale.id,
-          product_id: it.product_id,
-          product_name: it.name,
-          qty: it.qty,
-          unit_price: round(it.unit_price),
-          tax_pct: it.tax_pct,
-          line_discount: round(it.line_discount),
-          line_total: round(afterDiscount + tax),
-        };
-      });
-      const { error: e2 } = await supabase.from("sale_items").insert(items);
-      if (e2) throw e2;
-      toast.success(`Bill ${sale.bill_no} created`);
-      generateReceipt({
-        bill_no: sale.bill_no,
-        created_at: sale.created_at,
-        customer_name: custName, customer_phone: custPhone,
-        payment_mode: payment,
-        items: cart.map((it) => ({
-          name: it.name, qty: it.qty, unit_price: it.unit_price,
-          tax_pct: it.tax_pct, line_discount: it.line_discount,
-          line_total: Math.max(0, it.qty * it.unit_price - it.line_discount) * (1 + it.tax_pct / 100),
-        })),
-        ...totals,
-      });
-      setCart([]); setBillDiscount("0"); setCustName(""); setCustPhone("");
-      inputRef.current?.focus();
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Could not save bill");
-    } finally {
-      setSubmitting(false);
-    }
+  const updateLine = (i: number, patch: Partial<CartLine>) => {
+    setCart((c) => c.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
   };
+  const removeLine = (i: number) => setCart((c) => c.filter((_, idx) => idx !== i));
+  const clearCart = () => { setCart([]); setBillDiscount(0); setCustomerName(""); setCustomerPhone(""); };
+
+  // Hold bill
+  const holdBill = async () => {
+    if (cart.length === 0) return;
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) return;
+    const { error } = await supabase.from("held_bills").insert({
+      cashier_id: u.user.id,
+      label: customerName || `Bill ${new Date().toLocaleTimeString()}`,
+      cart: cart as unknown as never,
+      customer_name: customerName || null,
+      customer_phone: customerPhone || null,
+      bill_discount: billDiscount,
+    });
+    if (error) { toast.error(error.message); return; }
+    toast.success("Bill held");
+    clearCart();
+    qc.invalidateQueries({ queryKey: ["held-bills"] });
+  };
+
+  const recallBill = async (id: string) => {
+    const held = heldQ.data?.find((h) => h.id === id);
+    if (!held) return;
+    setCart(held.cart as unknown as CartLine[]);
+    setCustomerName(held.customer_name ?? "");
+    setCustomerPhone(held.customer_phone ?? "");
+    setBillDiscount(Number(held.bill_discount ?? 0));
+    await supabase.from("held_bills").delete().eq("id", id);
+    qc.invalidateQueries({ queryKey: ["held-bills"] });
+    setRecallOpen(false);
+    toast.success("Bill recalled");
+  };
+
+  // Keyboard: F2 scan, F4 hold, F8 pay
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "F2") { e.preventDefault(); setScanOpen(true); }
+      else if (e.key === "F4") { e.preventDefault(); holdBill(); }
+      else if (e.key === "F8") { e.preventDefault(); if (cart.length) setPaymentOpen(true); }
+      else if (e.key === "/" && document.activeElement?.tagName !== "INPUT") {
+        e.preventDefault(); searchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [cart, holdBill]);
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-4">
-        {/* Left: scan + cart */}
-        <div className="space-y-4">
-          <Card className="p-4">
-            <form onSubmit={onQuerySubmit} className="flex gap-2">
+    <div className="h-[calc(100vh-3.5rem)] lg:h-screen flex flex-col">
+      <div className="px-4 lg:px-6 py-3 border-b bg-surface flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-lg font-semibold tracking-tight flex items-center gap-2">
+            <ShoppingCart className="size-5 text-primary" /> Billing
+          </div>
+          <div className="text-xs text-muted-foreground">F2 scan · F4 hold · F8 pay · / search</div>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setRecallOpen(true)}>
+            <Play className="size-4" /> Recall {heldQ.data?.length ? `(${heldQ.data.length})` : ""}
+          </Button>
+          <Button variant="outline" onClick={holdBill} disabled={!cart.length}>
+            <Pause className="size-4" /> Hold
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex-1 grid lg:grid-cols-[1fr_420px] min-h-0">
+        {/* Left: search + cart */}
+        <div className="flex flex-col min-h-0 border-r">
+          <div className="p-4 border-b space-y-3 bg-background">
+            <div className="flex gap-2">
               <div className="relative flex-1">
-                <ScanBarcode className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  ref={inputRef}
-                  className="pl-9 h-11 text-base"
-                  placeholder="Scan barcode or type product name… press Enter"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  ref={searchRef}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search product by name, brand or barcode…"
+                  className="h-11 pl-9"
                   autoFocus
                 />
               </div>
-              <Button type="button" variant="outline" onClick={() => setScannerOpen(true)} className="h-11">
-                <ScanBarcode className="size-4" />
+              <Button onClick={() => setScanOpen(true)} className="h-11">
+                <CameraIcon className="size-4" /> Scan
               </Button>
-              <Button type="button" variant="outline" onClick={() => setShowPicker(true)} className="h-11">
-                <Search className="size-4" />
-              </Button>
-            </form>
-          </Card>
-
-          <Card className="overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/60 text-muted-foreground">
-                  <tr className="text-left">
-                    <th className="px-3 py-2.5 font-medium">Item</th>
-                    <th className="px-3 py-2.5 font-medium text-right">Price</th>
-                    <th className="px-3 py-2.5 font-medium text-center">Qty</th>
-                    <th className="px-3 py-2.5 font-medium text-right">Disc</th>
-                    <th className="px-3 py-2.5 font-medium text-right">Total</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {cart.map((it, i) => {
-                    const gross = it.qty * it.unit_price;
-                    const afterDisc = Math.max(0, gross - it.line_discount);
-                    const tot = afterDisc * (1 + it.tax_pct / 100);
-                    return (
-                      <tr key={i} className="border-t">
-                        <td className="px-3 py-2">
-                          <div className="font-medium">{it.name}</div>
-                          <div className="text-xs text-muted-foreground">GST {num(it.tax_pct)}%</div>
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <Input className="h-8 w-24 text-right ml-auto" type="number" step="0.01"
-                            value={it.unit_price}
-                            onChange={(e) => updateItem(i, { unit_price: Number(e.target.value) })} />
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="flex items-center justify-center gap-1">
-                            <Button variant="outline" size="icon" className="size-7"
-                              onClick={() => updateItem(i, { qty: Math.max(0.001, it.qty - 1) })}>
-                              <Minus className="size-3" />
-                            </Button>
-                            <Input className="h-8 w-16 text-center" type="number" step="0.001"
-                              value={it.qty}
-                              onChange={(e) => updateItem(i, { qty: Number(e.target.value) })} />
-                            <Button variant="outline" size="icon" className="size-7"
-                              onClick={() => updateItem(i, { qty: it.qty + 1 })}>
-                              <Plus className="size-3" />
-                            </Button>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <Input className="h-8 w-20 text-right ml-auto" type="number" step="0.01"
-                            value={it.line_discount}
-                            onChange={(e) => updateItem(i, { line_discount: Number(e.target.value) })} />
-                        </td>
-                        <td className="px-3 py-2 text-right font-semibold">{inr(tot)}</td>
-                        <td className="px-2 py-2 text-right">
-                          <Button variant="ghost" size="icon" onClick={() => removeItem(i)}>
-                            <Trash2 className="size-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {!cart.length && (
-                    <tr><td colSpan={6} className="px-3 py-12 text-center text-muted-foreground">
-                      Scan a barcode or search a product to start a bill
-                    </td></tr>
-                  )}
-                </tbody>
-              </table>
             </div>
-          </Card>
+            {search && (
+              <div className="rounded-md border bg-card max-h-64 overflow-auto">
+                {searchResults.length === 0 ? (
+                  <div className="p-3 text-sm text-muted-foreground">No matches.</div>
+                ) : (
+                  searchResults.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => { addProduct(p); setSearch(""); searchRef.current?.focus(); }}
+                      className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-accent text-sm border-b last:border-0"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{p.name}</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {p.brand ?? "—"} · stock {Number(p.stock_qty)} {p.unit}
+                        </div>
+                      </div>
+                      <div className="font-semibold tabular-nums">{inr(p.selling_price)}</div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-auto p-4">
+            {cart.length === 0 ? (
+              <div className="h-full grid place-items-center text-center text-muted-foreground">
+                <div>
+                  <ShoppingCart className="size-12 mx-auto mb-3 opacity-30" />
+                  <div className="font-medium">Cart is empty</div>
+                  <div className="text-sm">Scan a barcode or search a product to begin.</div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {cart.map((l, i) => (
+                  <Card key={i} className="p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{l.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {inr(l.unit_price)} {l.tax_pct > 0 ? `· GST ${l.tax_pct}%` : ""}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button size="icon" variant="outline" className="size-8" onClick={() => updateLine(i, { qty: Math.max(1, l.qty - 1) })}>
+                          <Minus className="size-3" />
+                        </Button>
+                        <Input
+                          type="number" min={1} value={l.qty}
+                          onChange={(e) => updateLine(i, { qty: Math.max(1, Number(e.target.value) || 1) })}
+                          className="w-16 h-8 text-center"
+                        />
+                        <Button size="icon" variant="outline" className="size-8" onClick={() => updateLine(i, { qty: l.qty + 1 })}>
+                          <Plus className="size-3" />
+                        </Button>
+                      </div>
+                      <div className="w-24 text-right">
+                        <div className="font-semibold tabular-nums">{inr(l.unit_price * l.qty - l.discount)}</div>
+                        <Input
+                          type="number" min={0} value={l.discount || ""}
+                          onChange={(e) => updateLine(i, { discount: Math.max(0, Number(e.target.value) || 0) })}
+                          placeholder="disc"
+                          className="h-7 text-xs text-right mt-1"
+                        />
+                      </div>
+                      <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => removeLine(i)}>
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Right: totals */}
-        <Card className="p-5 h-fit lg:sticky lg:top-4 space-y-4">
-          <h2 className="font-semibold text-lg">Bill summary</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Customer name</Label>
-              <Input value={custName} onChange={(e) => setCustName(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Phone</Label>
-              <Input value={custPhone} onChange={(e) => setCustPhone(e.target.value)} />
+        {/* Right: summary */}
+        <aside className="flex flex-col bg-surface">
+          <div className="p-4 border-b space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">Customer</Label>
+                <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Name (optional)" className="h-9" />
+              </div>
+              <div>
+                <Label className="text-xs">Phone</Label>
+                <Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Optional" className="h-9" />
+              </div>
             </div>
           </div>
-          <div className="space-y-2 text-sm border-t pt-3">
+
+          <div className="flex-1 overflow-auto p-4 space-y-2 text-sm">
             <Row label="Subtotal" value={inr(totals.subtotal)} />
-            <Row label="GST" value={inr(totals.taxTotal)} />
-            {totals.lineDiscount > 0 && <Row label="Item discounts" value={`- ${inr(totals.lineDiscount)}`} />}
+            <Row label="Item discount" value={`- ${inr(totals.lineDisc)}`} muted />
+            <Row label="GST" value={inr(totals.taxTotal)} muted />
             <div className="flex items-center justify-between gap-2">
-              <Label className="text-sm">Bill discount</Label>
-              <Input type="number" step="0.01" value={billDiscount} onChange={(e) => setBillDiscount(e.target.value)}
-                className="h-8 w-28 text-right" />
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <Label className="text-sm">Payment</Label>
-              <Select value={payment} onValueChange={setPayment}>
-                <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="upi">UPI</SelectItem>
-                  <SelectItem value="card">Card</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="text-xs">Bill discount (₹)</Label>
+              <Input
+                type="number" min={0} value={billDiscount || ""}
+                onChange={(e) => setBillDiscount(Math.max(0, Number(e.target.value) || 0))}
+                className="w-28 h-9 text-right"
+              />
             </div>
           </div>
-          <div className="border-t pt-3 flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Grand total</span>
-            <span className="text-2xl font-semibold">{inr(totals.grand)}</span>
+
+          <div className="p-4 border-t space-y-3 bg-background">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">Grand total</div>
+              <div className="text-3xl font-semibold tabular-nums">{inr(totals.grand)}</div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" onClick={clearCart} disabled={!cart.length}>Clear</Button>
+              <Button className="h-11 text-base" disabled={!cart.length} onClick={() => setPaymentOpen(true)}>
+                <IndianRupee className="size-4" /> Pay
+              </Button>
+            </div>
           </div>
-          <Button className="w-full h-11" onClick={submit} disabled={submitting || !cart.length}>
-            <Receipt className="size-4 mr-2" />
-            {submitting ? "Saving…" : "Complete & print"}
-          </Button>
-          {cart.length > 0 && (
-            <Button variant="ghost" className="w-full" onClick={() => setCart([])}>
-              <X className="size-4 mr-2" /> Clear cart
-            </Button>
-          )}
-        </Card>
+        </aside>
       </div>
 
-      <ProductPicker
-        open={showPicker}
-        onClose={() => setShowPicker(false)}
-        products={products.data ?? []}
-        onPick={(p) => { addProduct(p); setShowPicker(false); setQuery(""); }}
-        initialQuery={query}
-      />
+      {/* Scanner */}
+      <Dialog open={scanOpen} onOpenChange={setScanOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Scan barcode</DialogTitle></DialogHeader>
+          <ScannerPanel
+            active={scanOpen}
+            continuous
+            onCameraError={() => setScanOpen(false)}
+            onScan={(code) => handleScan(code)}
+          />
+          <DialogFooter><Button variant="outline" onClick={() => setScanOpen(false)}>Done</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      <CameraScanner open={scannerOpen} onClose={() => setScannerOpen(false)} onScan={(code) => {
-        setScannerOpen(false);
-        const list = products.data ?? [];
-        const p = list.find((x) => x.barcode === code);
-        if (p) { addProduct(p); toast.success(`Added ${p.name}`); }
-        else { toast.error(`No product with barcode ${code}`); setQuery(code); }
-      }} />
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium">{value}</span>
-    </div>
-  );
-}
-
-function round(n: number) { return Math.round(n * 100) / 100; }
-
-function ProductPicker({
-  open, onClose, products, onPick, initialQuery,
-}: {
-  open: boolean; onClose: () => void; products: Product[];
-  onPick: (p: Product) => void; initialQuery: string;
-}) {
-  const [q, setQ] = useState("");
-  useEffect(() => { if (open) setQ(initialQuery || ""); }, [open, initialQuery]);
-  const list = q.trim()
-    ? products.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()) || p.barcode?.toLowerCase().includes(q.toLowerCase()))
-    : products.slice(0, 50);
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-xl">
-        <DialogHeader><DialogTitle>Select a product</DialogTitle></DialogHeader>
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" autoFocus />
-        <div className="max-h-80 overflow-auto divide-y border rounded-md">
-          {list.map((p) => (
-            <button key={p.id} className="w-full text-left px-3 py-2 hover:bg-muted flex items-center justify-between gap-3" onClick={() => onPick(p)}>
-              <div>
-                <div className="font-medium">{p.name}</div>
-                <div className="text-xs text-muted-foreground">{p.barcode || "no barcode"} · stock {num(p.stock_qty)} {p.unit}</div>
-              </div>
-              <span className="font-semibold">{inr(p.selling_price)}</span>
-            </button>
-          ))}
-          {!list.length && <div className="px-3 py-6 text-center text-muted-foreground text-sm">No matches</div>}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// Supported formats — broadened to cover retail 1D, postal, and 2D codes.
-const SUPPORTED_FORMAT_NAMES = [
-  "EAN_13", "EAN_8", "UPC_A", "UPC_E", "UPC_EAN_EXTENSION",
-  "CODE_128", "CODE_93", "CODE_39", "CODABAR", "ITF", "RSS_14", "RSS_EXPANDED",
-  "QR_CODE", "DATA_MATRIX", "AZTEC", "PDF_417", "MAXICODE",
-] as const;
-
-const FORMAT_LABEL: Record<string, string> = {
-  EAN_13: "EAN-13", EAN_8: "EAN-8", UPC_A: "UPC-A", UPC_E: "UPC-E", UPC_EAN_EXTENSION: "UPC/EAN ext.",
-  CODE_128: "Code 128", CODE_93: "Code 93", CODE_39: "Code 39", CODABAR: "Codabar", ITF: "ITF",
-  RSS_14: "GS1 DataBar", RSS_EXPANDED: "GS1 DataBar Exp.",
-  QR_CODE: "QR", DATA_MATRIX: "Data Matrix", AZTEC: "Aztec", PDF_417: "PDF417", MAXICODE: "MaxiCode",
-};
-
-function CameraScanner({ open, onClose, onScan }: { open: boolean; onClose: () => void; onScan: (code: string) => void }) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
-  const [deviceId, setDeviceId] = useState<string | undefined>(undefined);
-  const [manual, setManual] = useState("");
-  const [lastFormat, setLastFormat] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open) {
-      setLastFormat(null);
-      return;
-    }
-    let controls: { stop: () => void } | null = null;
-    let cancelled = false;
-
-    (async () => {
-      try {
-        if (!navigator.mediaDevices?.getUserMedia) {
-          toast.error("Camera not supported on this device");
-          return;
-        }
-        const { BrowserMultiFormatReader } = await import("@zxing/browser");
-        const { DecodeHintType, BarcodeFormat } = await import("@zxing/library");
-        const formats = SUPPORTED_FORMAT_NAMES
-          .map((n) => (BarcodeFormat as unknown as Record<string, number>)[n])
-          .filter((v) => typeof v === "number");
-        const hints = new Map();
-        hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
-        hints.set(DecodeHintType.TRY_HARDER, true);
-        const reader = new BrowserMultiFormatReader(hints);
-
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-          stream.getTracks().forEach((t) => t.stop());
-        } catch {
-          toast.error("Camera permission denied");
-          return;
-        }
-        const cams = await BrowserMultiFormatReader.listVideoInputDevices();
-        if (cancelled) return;
-        setDevices(cams);
-        const preferred = cams.find((c) => /back|rear|environment/i.test(c.label))?.deviceId
-          ?? deviceId
-          ?? cams[0]?.deviceId;
-        setDeviceId(preferred);
-        if (!videoRef.current) return;
-
-        controls = await reader.decodeFromVideoDevice(
-          preferred,
-          videoRef.current,
-          (result, _err, ctrl) => {
-            if (result) {
-              const text = result.getText();
-              const fmt = BarcodeFormat[result.getBarcodeFormat()] ?? "Unknown";
-              setLastFormat(fmt);
-              ctrl.stop();
-              onScan(text);
-            }
-          },
-        );
-      } catch (e) {
-        console.error("scanner error", e);
-        toast.error("Camera unavailable");
-        onClose();
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      controls?.stop();
-    };
-  }, [open, deviceId, onScan, onClose]);
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>Scan barcode</DialogTitle></DialogHeader>
-        <div className="w-full aspect-[4/3] bg-black rounded-md overflow-hidden relative">
-          <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
-          {lastFormat && (
-            <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-primary-foreground text-xs font-medium">
-              {FORMAT_LABEL[lastFormat] ?? lastFormat}
+      {/* Recall */}
+      <Dialog open={recallOpen} onOpenChange={setRecallOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Recall held bills</DialogTitle></DialogHeader>
+          {!heldQ.data?.length ? (
+            <div className="py-8 text-center text-muted-foreground text-sm">No held bills.</div>
+          ) : (
+            <div className="divide-y max-h-96 overflow-auto -mx-6">
+              {heldQ.data.map((h) => {
+                const lines = (h.cart as unknown as CartLine[]) ?? [];
+                const total = lines.reduce((s, l) => s + l.unit_price * l.qty - l.discount, 0);
+                return (
+                  <button key={h.id} onClick={() => recallBill(h.id)} className="w-full px-6 py-3 text-left hover:bg-accent flex items-center justify-between">
+                    <div>
+                      <div className="font-medium">{h.label}</div>
+                      <div className="text-xs text-muted-foreground">{lines.length} items · {new Date(h.created_at).toLocaleTimeString()}</div>
+                    </div>
+                    <div className="font-semibold tabular-nums">{inr(total)}</div>
+                  </button>
+                );
+              })}
             </div>
           )}
-        </div>
-        {devices.length > 1 && (
-          <Select value={deviceId} onValueChange={setDeviceId}>
-            <SelectTrigger className="h-9"><SelectValue placeholder="Camera" /></SelectTrigger>
-            <SelectContent>
-              {devices.map((d) => (
-                <SelectItem key={d.deviceId} value={d.deviceId}>{d.label || `Camera ${d.deviceId.slice(0, 6)}`}</SelectItem>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment */}
+      <PaymentDialog
+        open={paymentOpen}
+        onClose={() => setPaymentOpen(false)}
+        totals={totals}
+        cart={cart}
+        customerName={customerName}
+        customerPhone={customerPhone}
+        onCompleted={() => { clearCart(); qc.invalidateQueries({ queryKey: ["billing-products"] }); }}
+      />
+    </div>
+  );
+}
+
+function Row({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
+  return (
+    <div className={`flex items-center justify-between ${muted ? "text-muted-foreground" : ""}`}>
+      <span>{label}</span>
+      <span className="tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+function PaymentDialog({
+  open, onClose, totals, cart, customerName, customerPhone, onCompleted,
+}: {
+  open: boolean; onClose: () => void;
+  totals: { subtotal: number; lineDisc: number; taxTotal: number; billDisc: number; grand: number };
+  cart: CartLine[]; customerName: string; customerPhone: string;
+  onCompleted: () => void;
+}) {
+  const [mode, setMode] = useState("cash");
+  const [paid, setPaid] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [upiQr, setUpiQr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) { setMode("cash"); setPaid(""); setUpiQr(null); }
+    else setPaid(totals.grand.toFixed(2));
+  }, [open, totals.grand]);
+
+  useEffect(() => {
+    if (mode === "upi" || mode === "qr") {
+      const upi = `upi://pay?pa=merchant@upi&pn=Bazaar%20Supermarket&am=${totals.grand.toFixed(2)}&cu=INR&tn=Bill`;
+      QRCode.toDataURL(upi, { width: 220, margin: 1 }).then(setUpiQr).catch(() => setUpiQr(null));
+    } else setUpiQr(null);
+  }, [mode, totals.grand]);
+
+  const paidNum = Number(paid) || 0;
+  const change = Math.max(0, paidNum - totals.grand);
+  const insufficient = mode === "cash" && paidNum < totals.grand;
+
+  const complete = async () => {
+    setLoading(true);
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) throw new Error("Not signed in");
+      const { data: billNoRes, error: billErr } = await supabase.rpc("next_bill_no");
+      if (billErr) throw billErr;
+      const bill_no = billNoRes as unknown as string;
+
+      const { data: saleRows, error: saleErr } = await supabase
+        .from("sales")
+        .insert({
+          bill_no,
+          cashier_id: u.user.id,
+          customer_name: customerName || null,
+          customer_phone: customerPhone || null,
+          subtotal: totals.subtotal,
+          tax_total: totals.taxTotal,
+          line_discount: totals.lineDisc,
+          bill_discount: totals.billDisc,
+          grand_total: totals.grand,
+          payment_mode: mode,
+          paid_amount: paidNum,
+          change_amount: change,
+          status: "completed",
+        })
+        .select("id,created_at")
+        .single();
+      if (saleErr) throw saleErr;
+
+      const items = cart.map((l) => ({
+        sale_id: saleRows.id,
+        product_id: l.product_id,
+        name: l.name,
+        qty: l.qty,
+        unit_price: l.unit_price,
+        tax_pct: l.tax_pct,
+        line_discount: l.discount,
+        line_total: l.unit_price * l.qty - l.discount,
+      }));
+      const { error: itemsErr } = await supabase.from("sale_items").insert(items);
+      if (itemsErr) throw itemsErr;
+
+      await generateReceipt({
+        bill_no, created_at: saleRows.created_at,
+        customer_name: customerName, customer_phone: customerPhone,
+        payment_mode: mode, paid_amount: paidNum, change_amount: change,
+        items: cart.map((l) => ({
+          name: l.name, qty: l.qty, unit_price: l.unit_price, tax_pct: l.tax_pct,
+          line_discount: l.discount, line_total: l.unit_price * l.qty - l.discount,
+        })),
+        subtotal: totals.subtotal, taxTotal: totals.taxTotal,
+        lineDiscount: totals.lineDisc, billDisc: totals.billDisc, grand: totals.grand,
+      });
+
+      toast.success(`Bill ${bill_no} completed`);
+      onCompleted();
+      onClose();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to complete");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const quickPaid = [totals.grand, Math.ceil(totals.grand / 100) * 100, Math.ceil(totals.grand / 500) * 500];
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && !loading && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Collect payment</DialogTitle>
+          <DialogDescription>Total due <span className="font-semibold text-foreground">{inr(totals.grand)}</span></DialogDescription>
+        </DialogHeader>
+
+        <Tabs value={mode} onValueChange={setMode}>
+          <TabsList className="grid grid-cols-4 w-full">
+            {PAYMENT_MODES.map((m) => <TabsTrigger key={m.value} value={m.value}>{m.label}</TabsTrigger>)}
+          </TabsList>
+
+          <TabsContent value="cash" className="space-y-3 pt-4">
+            <div>
+              <Label>Cash received</Label>
+              <Input type="number" value={paid} onChange={(e) => setPaid(e.target.value)} className="h-11 text-lg" />
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {[...new Set(quickPaid)].map((v) => (
+                <Button key={v} type="button" variant="outline" size="sm" onClick={() => setPaid(v.toFixed(2))}>{inr(v)}</Button>
               ))}
-            </SelectContent>
-          </Select>
-        )}
-        <div className="space-y-1.5">
-          <p className="text-xs text-muted-foreground text-center">Point the camera at the barcode</p>
-          <div className="flex flex-wrap gap-1 justify-center">
-            {SUPPORTED_FORMAT_NAMES.map((f) => (
-              <span
-                key={f}
-                className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                  lastFormat === f
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "border-border text-muted-foreground"
-                }`}
-              >
-                {FORMAT_LABEL[f] ?? f}
-              </span>
-            ))}
-          </div>
-        </div>
-        <div className="border-t pt-3 space-y-2">
-          <Label className="text-xs">Or enter barcode manually</Label>
-          <form
-            className="flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const code = manual.trim();
-              if (!code) return;
-              onScan(code);
-              setManual("");
-            }}
-          >
-            <Input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="Type or paste barcode" autoFocus={false} />
-            <Button type="submit">Add</Button>
-          </form>
-        </div>
+            </div>
+            <div className="flex justify-between rounded-md bg-muted p-3">
+              <span className="text-sm text-muted-foreground">Change</span>
+              <span className="font-semibold tabular-nums">{inr(change)}</span>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="card" className="pt-4">
+            <Select value="visa" onValueChange={() => {}}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="visa">Visa / Mastercard</SelectItem>
+                <SelectItem value="rupay">RuPay</SelectItem>
+                <SelectItem value="amex">Amex</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-2">Swipe / tap on your POS terminal, then complete the bill.</p>
+          </TabsContent>
+
+          {(["upi", "qr"] as const).map((m) => (
+            <TabsContent key={m} value={m} className="pt-4 text-center space-y-2">
+              {upiQr ? <img src={upiQr} alt="UPI QR" className="mx-auto rounded-md border" /> : <div className="h-[220px] grid place-items-center"><QrCode className="size-12 text-muted-foreground" /></div>}
+              <p className="text-sm font-medium">Pay {inr(totals.grand)} via UPI</p>
+              <p className="text-xs text-muted-foreground">Scan with any UPI app · Demo merchant ID</p>
+            </TabsContent>
+          ))}
+        </Tabs>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
+          <Button onClick={complete} disabled={loading || insufficient} className="min-w-32">
+            {loading ? <Loader2 className="size-4 animate-spin" /> : <Printer className="size-4" />}
+            Complete & print
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
