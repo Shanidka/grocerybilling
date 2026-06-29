@@ -46,7 +46,6 @@ const PAYMENT_MODES = [
 
 function Billing() {
   const qc = useQueryClient();
-  const { data: shop } = useShopSettings();
   const [scanOpen, setScanOpen] = useState(false);
   const [recallOpen, setRecallOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
