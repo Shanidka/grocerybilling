@@ -1,6 +1,14 @@
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
 
+export interface ShopInfo {
+  shop_name: string;
+  phone?: string | null;
+  address?: string | null;
+  gst_number?: string | null;
+  receipt_footer?: string | null;
+}
+
 export interface ReceiptInput {
   bill_no: string;
   created_at: string;
@@ -19,31 +27,38 @@ export interface ReceiptInput {
   lineDiscount: number;
   billDisc: number;
   grand: number;
+  shop?: ShopInfo;
 }
 
-const STORE_NAME = "Bazaar Supermarket";
-const STORE_TAGLINE = "GST Invoice · Thank you for shopping";
-
 export async function generateReceipt(r: ReceiptInput) {
-  // QR payload: scannable invoice
+  const shop: ShopInfo = r.shop ?? { shop_name: "My Supermarket" };
+
   const qrPayload = JSON.stringify({
     bill: r.bill_no,
     at: r.created_at,
     total: r.grand,
+    shop: shop.shop_name,
     items: r.items.map((i) => ({ n: i.name, q: i.qty, p: i.unit_price, t: i.line_total })),
   });
   const qrDataUrl = await QRCode.toDataURL(qrPayload, { margin: 0, width: 160 });
 
-  // 80mm thermal width
   const W = 80;
-  const H = 140 + r.items.length * 8 + 40;
+  const headerLines = 1 + (shop.address ? Math.ceil(shop.address.length / 36) : 0) + (shop.phone || shop.gst_number ? 1 : 0);
+  const H = 60 + headerLines * 4 + r.items.length * 8 + 70;
   const doc = new jsPDF({ unit: "mm", format: [W, H] });
   let y = 8;
 
   doc.setFont("helvetica", "bold").setFontSize(13);
-  doc.text(STORE_NAME, W / 2, y, { align: "center" }); y += 5;
+  doc.text(shop.shop_name, W / 2, y, { align: "center" }); y += 5;
   doc.setFont("helvetica", "normal").setFontSize(8);
-  doc.text(STORE_TAGLINE, W / 2, y, { align: "center" }); y += 5;
+  if (shop.address) {
+    const wrapped = doc.splitTextToSize(shop.address, W - 8);
+    doc.text(wrapped, W / 2, y, { align: "center" });
+    y += wrapped.length * 3.5;
+  }
+  const line2 = [shop.phone ? `Ph: ${shop.phone}` : null, shop.gst_number ? `GSTIN: ${shop.gst_number}` : null].filter(Boolean).join(" · ");
+  if (line2) { doc.text(line2, W / 2, y, { align: "center" }); y += 4; }
+  doc.text("Tax Invoice", W / 2, y, { align: "center" }); y += 4;
 
   doc.setLineDashPattern([0.5, 0.5], 0);
   doc.line(4, y, W - 4, y); y += 4;
@@ -70,7 +85,7 @@ export async function generateReceipt(r: ReceiptInput) {
   for (const it of r.items) {
     const nm = it.name.length > 22 ? it.name.slice(0, 22) + "…" : it.name;
     doc.text(nm, 4, y);
-    doc.text(String(it.qty), 42, y, { align: "right" });
+    doc.text(it.qty.toString(), 42, y, { align: "right" });
     doc.text(it.unit_price.toFixed(2), 58, y, { align: "right" });
     doc.text(it.line_total.toFixed(2), W - 4, y, { align: "right" });
     y += 4;
@@ -103,11 +118,15 @@ export async function generateReceipt(r: ReceiptInput) {
   if (r.change_amount > 0) right("Change", `₹${r.change_amount.toFixed(2)}`);
 
   y += 4;
-  // QR code
   doc.addImage(qrDataUrl, "PNG", (W - 28) / 2, y, 28, 28);
   y += 30;
   doc.setFont("helvetica", "normal").setFontSize(7).setTextColor(120);
   doc.text("Scan QR to view invoice details", W / 2, y, { align: "center" });
+  y += 3;
+  if (shop.receipt_footer) {
+    const wrapped = doc.splitTextToSize(shop.receipt_footer, W - 8);
+    doc.text(wrapped, W / 2, y, { align: "center" });
+  }
   doc.setTextColor(0);
 
   doc.save(`${r.bill_no}.pdf`);

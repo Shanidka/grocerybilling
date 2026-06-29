@@ -1,7 +1,7 @@
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff } from "lucide-react";
+import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff, Package, Settings as SettingsIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useMyRoles } from "@/hooks/use-role";
@@ -21,6 +21,8 @@ export const Route = createFileRoute("/_authenticated")({
 const nav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/billing", label: "Billing", icon: ScanBarcode },
+  { to: "/products", label: "Products", icon: Package },
+  { to: "/settings", label: "Settings", icon: SettingsIcon },
 ] as const;
 
 function AppShell() {
@@ -102,7 +104,7 @@ function AppShell() {
             );
           })}
           <div className="mt-4 px-3 text-[10px] uppercase tracking-wider text-sidebar-foreground/40">Coming next</div>
-          {["Products", "Inventory", "Reports", "Expiry", "Dead stock"].map((l) => (
+          {["Inventory", "Reports", "Alerts", "Staff"].map((l) => (
             <div key={l} className="px-3 py-2 text-sm text-sidebar-foreground/40 cursor-not-allowed">{l}</div>
           ))}
         </nav>
