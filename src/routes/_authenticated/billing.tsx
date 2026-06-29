@@ -445,6 +445,7 @@ function PaymentDialog({
   cart: CartLine[]; customerName: string; customerPhone: string;
   onCompleted: () => void;
 }) {
+  const { data: shop } = useShopSettings();
   const [mode, setMode] = useState("cash");
   const [paid, setPaid] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -457,10 +458,12 @@ function PaymentDialog({
 
   useEffect(() => {
     if (mode === "upi" || mode === "qr") {
-      const upi = `upi://pay?pa=merchant@upi&pn=Bazaar%20Supermarket&am=${totals.grand.toFixed(2)}&cu=INR&tn=Bill`;
+      const pa = shop?.upi_id || "merchant@upi";
+      const pn = encodeURIComponent(shop?.shop_name || "Supermarket");
+      const upi = `upi://pay?pa=${pa}&pn=${pn}&am=${totals.grand.toFixed(2)}&cu=INR&tn=Bill`;
       QRCode.toDataURL(upi, { width: 220, margin: 1 }).then(setUpiQr).catch(() => setUpiQr(null));
     } else setUpiQr(null);
-  }, [mode, totals.grand]);
+  }, [mode, totals.grand, shop?.upi_id, shop?.shop_name]);
 
   const paidNum = Number(paid) || 0;
   const change = Math.max(0, paidNum - totals.grand);
@@ -514,11 +517,16 @@ function PaymentDialog({
         customer_name: customerName, customer_phone: customerPhone,
         payment_mode: mode, paid_amount: paidNum, change_amount: change,
         items: cart.map((l) => ({
-          name: l.name, qty: l.qty, unit_price: l.unit_price, tax_pct: l.tax_pct,
+          name: l.name + (l.sold_by === "weight" ? ` (${l.qty.toFixed(3)}kg)` : ""),
+          qty: l.qty, unit_price: l.unit_price, tax_pct: l.tax_pct,
           line_discount: l.discount, line_total: l.unit_price * l.qty - l.discount,
         })),
         subtotal: totals.subtotal, taxTotal: totals.taxTotal,
         lineDiscount: totals.lineDisc, billDisc: totals.billDisc, grand: totals.grand,
+        shop: shop ? {
+          shop_name: shop.shop_name, phone: shop.phone, address: shop.address,
+          gst_number: shop.gst_number, receipt_footer: shop.receipt_footer,
+        } : undefined,
       });
 
       toast.success(`Bill ${bill_no} completed`);
