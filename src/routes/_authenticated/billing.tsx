@@ -16,6 +16,7 @@ import { CameraIcon, Plus, Minus, Trash2, Search, Pause, Play, Printer, IndianRu
 import { toast } from "sonner";
 import { inr } from "@/lib/format";
 import { generateReceipt } from "@/lib/receipt";
+import { useShopSettings, parseScaleBarcode } from "@/lib/shop-settings";
 import QRCode from "qrcode";
 
 export const Route = createFileRoute("/_authenticated/billing")({
@@ -27,11 +28,13 @@ export const Route = createFileRoute("/_authenticated/billing")({
 type Product = {
   id: string; barcode: string | null; name: string; brand: string | null;
   selling_price: number; mrp: number; tax_pct: number; stock_qty: number; unit: string;
+  sold_by: string; price_per_kg: number;
 };
 
 type CartLine = {
   product_id: string; name: string; unit_price: number; qty: number;
   tax_pct: number; discount: number; stock_qty: number;
+  sold_by: string; unit: string;
 };
 
 const PAYMENT_MODES = [
@@ -43,6 +46,7 @@ const PAYMENT_MODES = [
 
 function Billing() {
   const qc = useQueryClient();
+  const { data: shop } = useShopSettings();
   const [scanOpen, setScanOpen] = useState(false);
   const [recallOpen, setRecallOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -59,7 +63,7 @@ function Billing() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
-        .select("id,barcode,name,brand,selling_price,mrp,tax_pct,stock_qty,unit,is_active")
+        .select("id,barcode,name,brand,selling_price,mrp,tax_pct,stock_qty,unit,is_active,sold_by,price_per_kg")
         .eq("is_active", true)
         .order("name");
       if (error) throw error;
@@ -114,10 +118,12 @@ function Billing() {
     return { subtotal, lineDisc, taxTotal, billDisc, grand };
   }, [cart, billDiscount]);
 
-  const addProduct = (p: Product, qty = 1) => {
+  const addProduct = (p: Product, qty = 1, unitPriceOverride?: number) => {
+    const isWeight = p.sold_by === "weight";
+    const unit_price = unitPriceOverride ?? (isWeight ? Number(p.price_per_kg) : Number(p.selling_price));
     setCart((c) => {
-      const i = c.findIndex((l) => l.product_id === p.id);
-      if (i >= 0) {
+      const i = c.findIndex((l) => l.product_id === p.id && l.unit_price === unit_price);
+      if (i >= 0 && !isWeight) {
         const next = [...c];
         next[i] = { ...next[i], qty: next[i].qty + qty };
         return next;
@@ -125,19 +131,29 @@ function Billing() {
       return [
         ...c,
         {
-          product_id: p.id, name: p.name, unit_price: Number(p.selling_price),
+          product_id: p.id, name: p.name, unit_price,
           qty, tax_pct: Number(p.tax_pct), discount: 0, stock_qty: Number(p.stock_qty),
+          sold_by: p.sold_by, unit: isWeight ? "kg" : p.unit,
         },
       ];
     });
   };
 
   const handleScan = (code: string) => {
-    const p = products.find((x) => x.barcode === code);
-    if (!p) {
-      toast.error(`No product for ${code}`);
-      return;
+    // 1) Try scale-embedded EAN-13 (price/weight label)
+    const scale = parseScaleBarcode(code);
+    if (scale) {
+      const p = products.find((x) => x.barcode === scale.prefix || x.barcode?.startsWith(scale.prefix.slice(0, 7)));
+      if (p) {
+        const kg = scale.grams / 1000;
+        addProduct(p, kg);
+        toast.success(`Added ${p.name} (${kg.toFixed(3)} kg)`);
+        return;
+      }
     }
+    // 2) Exact barcode match
+    const p = products.find((x) => x.barcode === code);
+    if (!p) { toast.error(`No product for ${code}`); return; }
     addProduct(p);
     toast.success(`Added ${p.name}`);
   };
