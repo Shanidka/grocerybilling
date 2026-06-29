@@ -291,19 +291,22 @@ function Billing() {
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">{l.name}</div>
                         <div className="text-xs text-muted-foreground">
-                          {inr(l.unit_price)} {l.tax_pct > 0 ? `· GST ${l.tax_pct}%` : ""}
+                          {inr(l.unit_price)}{l.sold_by === "weight" ? "/kg" : ""} {l.tax_pct > 0 ? `· GST ${l.tax_pct}%` : ""}
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Button size="icon" variant="outline" className="size-8" onClick={() => updateLine(i, { qty: Math.max(1, l.qty - 1) })}>
+                        <Button size="icon" variant="outline" className="size-8" onClick={() => updateLine(i, { qty: Math.max(l.sold_by === "weight" ? 0.001 : 1, l.qty - (l.sold_by === "weight" ? 0.1 : 1)) })}>
                           <Minus className="size-3" />
                         </Button>
-                        <Input
-                          type="number" min={1} value={l.qty}
-                          onChange={(e) => updateLine(i, { qty: Math.max(1, Number(e.target.value) || 1) })}
-                          className="w-16 h-8 text-center"
-                        />
-                        <Button size="icon" variant="outline" className="size-8" onClick={() => updateLine(i, { qty: l.qty + 1 })}>
+                        <div className="relative">
+                          <Input
+                            type="number" min={0} step={l.sold_by === "weight" ? 0.001 : 1} value={l.qty}
+                            onChange={(e) => updateLine(i, { qty: Math.max(0, Number(e.target.value) || 0) })}
+                            className="w-20 h-8 text-center pr-6"
+                          />
+                          {l.sold_by === "weight" && <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">kg</span>}
+                        </div>
+                        <Button size="icon" variant="outline" className="size-8" onClick={() => updateLine(i, { qty: l.qty + (l.sold_by === "weight" ? 0.1 : 1) })}>
                           <Plus className="size-3" />
                         </Button>
                       </div>
