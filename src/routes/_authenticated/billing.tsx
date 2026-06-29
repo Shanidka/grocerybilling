@@ -16,6 +16,7 @@ import { CameraIcon, Plus, Minus, Trash2, Search, Pause, Play, Printer, IndianRu
 import { toast } from "sonner";
 import { inr } from "@/lib/format";
 import { generateReceipt } from "@/lib/receipt";
+import { useShopSettings, parseScaleBarcode } from "@/lib/shop-settings";
 import QRCode from "qrcode";
 
 export const Route = createFileRoute("/_authenticated/billing")({
@@ -27,11 +28,13 @@ export const Route = createFileRoute("/_authenticated/billing")({
 type Product = {
   id: string; barcode: string | null; name: string; brand: string | null;
   selling_price: number; mrp: number; tax_pct: number; stock_qty: number; unit: string;
+  sold_by: string; price_per_kg: number;
 };
 
 type CartLine = {
   product_id: string; name: string; unit_price: number; qty: number;
   tax_pct: number; discount: number; stock_qty: number;
+  sold_by: string; unit: string;
 };
 
 const PAYMENT_MODES = [
@@ -59,7 +62,7 @@ function Billing() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
-        .select("id,barcode,name,brand,selling_price,mrp,tax_pct,stock_qty,unit,is_active")
+        .select("id,barcode,name,brand,selling_price,mrp,tax_pct,stock_qty,unit,is_active,sold_by,price_per_kg")
         .eq("is_active", true)
         .order("name");
       if (error) throw error;
@@ -114,10 +117,12 @@ function Billing() {
     return { subtotal, lineDisc, taxTotal, billDisc, grand };
   }, [cart, billDiscount]);
 
-  const addProduct = (p: Product, qty = 1) => {
+  const addProduct = (p: Product, qty = 1, unitPriceOverride?: number) => {
+    const isWeight = p.sold_by === "weight";
+    const unit_price = unitPriceOverride ?? (isWeight ? Number(p.price_per_kg) : Number(p.selling_price));
     setCart((c) => {
-      const i = c.findIndex((l) => l.product_id === p.id);
-      if (i >= 0) {
+      const i = c.findIndex((l) => l.product_id === p.id && l.unit_price === unit_price);
+      if (i >= 0 && !isWeight) {
         const next = [...c];
         next[i] = { ...next[i], qty: next[i].qty + qty };
         return next;
@@ -125,19 +130,29 @@ function Billing() {
       return [
         ...c,
         {
-          product_id: p.id, name: p.name, unit_price: Number(p.selling_price),
+          product_id: p.id, name: p.name, unit_price,
           qty, tax_pct: Number(p.tax_pct), discount: 0, stock_qty: Number(p.stock_qty),
+          sold_by: p.sold_by, unit: isWeight ? "kg" : p.unit,
         },
       ];
     });
   };
 
   const handleScan = (code: string) => {
-    const p = products.find((x) => x.barcode === code);
-    if (!p) {
-      toast.error(`No product for ${code}`);
-      return;
+    // 1) Try scale-embedded EAN-13 (price/weight label)
+    const scale = parseScaleBarcode(code);
+    if (scale) {
+      const p = products.find((x) => x.barcode === scale.prefix || x.barcode?.startsWith(scale.prefix.slice(0, 7)));
+      if (p) {
+        const kg = scale.grams / 1000;
+        addProduct(p, kg);
+        toast.success(`Added ${p.name} (${kg.toFixed(3)} kg)`);
+        return;
+      }
     }
+    // 2) Exact barcode match
+    const p = products.find((x) => x.barcode === code);
+    if (!p) { toast.error(`No product for ${code}`); return; }
     addProduct(p);
     toast.success(`Added ${p.name}`);
   };
@@ -275,19 +290,22 @@ function Billing() {
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">{l.name}</div>
                         <div className="text-xs text-muted-foreground">
-                          {inr(l.unit_price)} {l.tax_pct > 0 ? `· GST ${l.tax_pct}%` : ""}
+                          {inr(l.unit_price)}{l.sold_by === "weight" ? "/kg" : ""} {l.tax_pct > 0 ? `· GST ${l.tax_pct}%` : ""}
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Button size="icon" variant="outline" className="size-8" onClick={() => updateLine(i, { qty: Math.max(1, l.qty - 1) })}>
+                        <Button size="icon" variant="outline" className="size-8" onClick={() => updateLine(i, { qty: Math.max(l.sold_by === "weight" ? 0.001 : 1, l.qty - (l.sold_by === "weight" ? 0.1 : 1)) })}>
                           <Minus className="size-3" />
                         </Button>
-                        <Input
-                          type="number" min={1} value={l.qty}
-                          onChange={(e) => updateLine(i, { qty: Math.max(1, Number(e.target.value) || 1) })}
-                          className="w-16 h-8 text-center"
-                        />
-                        <Button size="icon" variant="outline" className="size-8" onClick={() => updateLine(i, { qty: l.qty + 1 })}>
+                        <div className="relative">
+                          <Input
+                            type="number" min={0} step={l.sold_by === "weight" ? 0.001 : 1} value={l.qty}
+                            onChange={(e) => updateLine(i, { qty: Math.max(0, Number(e.target.value) || 0) })}
+                            className="w-20 h-8 text-center pr-6"
+                          />
+                          {l.sold_by === "weight" && <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">kg</span>}
+                        </div>
+                        <Button size="icon" variant="outline" className="size-8" onClick={() => updateLine(i, { qty: l.qty + (l.sold_by === "weight" ? 0.1 : 1) })}>
                           <Plus className="size-3" />
                         </Button>
                       </div>
@@ -426,6 +444,7 @@ function PaymentDialog({
   cart: CartLine[]; customerName: string; customerPhone: string;
   onCompleted: () => void;
 }) {
+  const { data: shop } = useShopSettings();
   const [mode, setMode] = useState("cash");
   const [paid, setPaid] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -438,10 +457,12 @@ function PaymentDialog({
 
   useEffect(() => {
     if (mode === "upi" || mode === "qr") {
-      const upi = `upi://pay?pa=merchant@upi&pn=Bazaar%20Supermarket&am=${totals.grand.toFixed(2)}&cu=INR&tn=Bill`;
+      const pa = shop?.upi_id || "merchant@upi";
+      const pn = encodeURIComponent(shop?.shop_name || "Supermarket");
+      const upi = `upi://pay?pa=${pa}&pn=${pn}&am=${totals.grand.toFixed(2)}&cu=INR&tn=Bill`;
       QRCode.toDataURL(upi, { width: 220, margin: 1 }).then(setUpiQr).catch(() => setUpiQr(null));
     } else setUpiQr(null);
-  }, [mode, totals.grand]);
+  }, [mode, totals.grand, shop?.upi_id, shop?.shop_name]);
 
   const paidNum = Number(paid) || 0;
   const change = Math.max(0, paidNum - totals.grand);
@@ -495,11 +516,16 @@ function PaymentDialog({
         customer_name: customerName, customer_phone: customerPhone,
         payment_mode: mode, paid_amount: paidNum, change_amount: change,
         items: cart.map((l) => ({
-          name: l.name, qty: l.qty, unit_price: l.unit_price, tax_pct: l.tax_pct,
+          name: l.name + (l.sold_by === "weight" ? ` (${l.qty.toFixed(3)}kg)` : ""),
+          qty: l.qty, unit_price: l.unit_price, tax_pct: l.tax_pct,
           line_discount: l.discount, line_total: l.unit_price * l.qty - l.discount,
         })),
         subtotal: totals.subtotal, taxTotal: totals.taxTotal,
         lineDiscount: totals.lineDisc, billDisc: totals.billDisc, grand: totals.grand,
+        shop: shop ? {
+          shop_name: shop.shop_name, phone: shop.phone, address: shop.address,
+          gst_number: shop.gst_number, receipt_footer: shop.receipt_footer,
+        } : undefined,
       });
 
       toast.success(`Bill ${bill_no} completed`);
