@@ -609,3 +609,52 @@ function PaymentDialog({
     </Dialog>
   );
 }
+
+function ShareBillDialog({ info, onClose }: { info: { billNo: string; phone: string; total: number } | null; onClose: () => void }) {
+  const url = info && typeof window !== "undefined" ? `${window.location.origin}/i/${info.billNo}` : "";
+  const msg = info ? `Your bill ${info.billNo} for ${inr(info.total)} — view: ${url}` : "";
+  const waNumber = info?.phone?.replace(/\D/g, "") ?? "";
+  const waLink = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
+  return (
+    <Dialog open={!!info} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Share bill with customer</DialogTitle>
+          <DialogDescription>Bill <b>{info?.billNo}</b> · {info ? inr(info.total) : ""}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <div className="rounded-md border p-2 text-xs font-mono break-all bg-muted">{url}</div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={() => { navigator.clipboard?.writeText(url); toast.success("Link copied"); }}>
+              <Copy className="size-4" /> Copy link
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!waNumber}
+              onClick={() => window.open(waLink, "_blank", "noopener")}
+              title={waNumber ? "Share via WhatsApp" : "Add a customer phone first"}
+            >
+              <MessageCircle className="size-4" /> WhatsApp
+            </Button>
+            <Button
+              variant="outline"
+              className="col-span-2"
+              onClick={async () => {
+                if (navigator.share) {
+                  try { await navigator.share({ title: `Bill ${info?.billNo}`, text: msg, url }); }
+                  catch { /* user cancelled */ }
+                } else { navigator.clipboard?.writeText(url); toast.success("Link copied"); }
+              }}
+            >
+              <Share2 className="size-4" /> Share…
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">SMS gateway can be wired up later; use WhatsApp or share-sheet for now.</p>
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Done</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
