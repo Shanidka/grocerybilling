@@ -12,7 +12,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScannerPanel } from "@/components/camera-scanner";
-import { CameraIcon, Plus, Minus, Trash2, Search, Pause, Play, Printer, IndianRupee, Loader2, ShoppingCart, QrCode } from "lucide-react";
+import { CameraIcon, Plus, Minus, Trash2, Search, Pause, Play, Printer, IndianRupee, Loader2, ShoppingCart, QrCode, Share2, Copy, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { inr } from "@/lib/format";
 import { generateReceipt } from "@/lib/receipt";
@@ -49,6 +49,7 @@ function Billing() {
   const [scanOpen, setScanOpen] = useState(false);
   const [recallOpen, setRecallOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [shareInfo, setShareInfo] = useState<{ billNo: string; phone: string; total: number } | null>(null);
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [billDiscount, setBillDiscount] = useState(0);
@@ -421,8 +422,13 @@ function Billing() {
         cart={cart}
         customerName={customerName}
         customerPhone={customerPhone}
-        onCompleted={() => { clearCart(); qc.invalidateQueries({ queryKey: ["billing-products"] }); }}
+        onCompleted={(billNo, phone, total) => {
+          setShareInfo({ billNo, phone, total });
+          clearCart();
+          qc.invalidateQueries({ queryKey: ["billing-products"] });
+        }}
       />
+      <ShareBillDialog info={shareInfo} onClose={() => setShareInfo(null)} />
     </div>
   );
 }
@@ -442,7 +448,7 @@ function PaymentDialog({
   open: boolean; onClose: () => void;
   totals: { subtotal: number; lineDisc: number; taxTotal: number; billDisc: number; grand: number };
   cart: CartLine[]; customerName: string; customerPhone: string;
-  onCompleted: () => void;
+  onCompleted: (billNo: string, phone: string, total: number) => void;
 }) {
   const { data: shop } = useShopSettings();
   const [mode, setMode] = useState("cash");
@@ -511,6 +517,7 @@ function PaymentDialog({
       const { error: itemsErr } = await supabase.from("sale_items").insert(items);
       if (itemsErr) throw itemsErr;
 
+      const invoice_url = typeof window !== "undefined" ? `${window.location.origin}/i/${bill_no}` : undefined;
       await generateReceipt({
         bill_no, created_at: saleRows.created_at,
         customer_name: customerName, customer_phone: customerPhone,
@@ -522,14 +529,15 @@ function PaymentDialog({
         })),
         subtotal: totals.subtotal, taxTotal: totals.taxTotal,
         lineDiscount: totals.lineDisc, billDisc: totals.billDisc, grand: totals.grand,
+        invoice_url,
         shop: shop ? {
           shop_name: shop.shop_name, phone: shop.phone, address: shop.address,
-          gst_number: shop.gst_number, receipt_footer: shop.receipt_footer,
+          gst_number: shop.gst_number, upi_id: shop.upi_id, receipt_footer: shop.receipt_footer,
         } : undefined,
       });
 
       toast.success(`Bill ${bill_no} completed`);
-      onCompleted();
+      onCompleted(bill_no, customerPhone, totals.grand);
       onClose();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to complete");
