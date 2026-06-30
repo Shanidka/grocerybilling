@@ -12,7 +12,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScannerPanel } from "@/components/camera-scanner";
-import { CameraIcon, Plus, Minus, Trash2, Search, Pause, Play, Printer, IndianRupee, Loader2, ShoppingCart, QrCode } from "lucide-react";
+import { CameraIcon, Plus, Minus, Trash2, Search, Pause, Play, Printer, IndianRupee, Loader2, ShoppingCart, QrCode, Share2, Copy, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { inr } from "@/lib/format";
 import { generateReceipt } from "@/lib/receipt";
@@ -49,6 +49,7 @@ function Billing() {
   const [scanOpen, setScanOpen] = useState(false);
   const [recallOpen, setRecallOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [shareInfo, setShareInfo] = useState<{ billNo: string; phone: string; total: number } | null>(null);
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [billDiscount, setBillDiscount] = useState(0);
@@ -421,8 +422,13 @@ function Billing() {
         cart={cart}
         customerName={customerName}
         customerPhone={customerPhone}
-        onCompleted={() => { clearCart(); qc.invalidateQueries({ queryKey: ["billing-products"] }); }}
+        onCompleted={(billNo, phone, total) => {
+          setShareInfo({ billNo, phone, total });
+          clearCart();
+          qc.invalidateQueries({ queryKey: ["billing-products"] });
+        }}
       />
+      <ShareBillDialog info={shareInfo} onClose={() => setShareInfo(null)} />
     </div>
   );
 }
@@ -442,7 +448,7 @@ function PaymentDialog({
   open: boolean; onClose: () => void;
   totals: { subtotal: number; lineDisc: number; taxTotal: number; billDisc: number; grand: number };
   cart: CartLine[]; customerName: string; customerPhone: string;
-  onCompleted: () => void;
+  onCompleted: (billNo: string, phone: string, total: number) => void;
 }) {
   const { data: shop } = useShopSettings();
   const [mode, setMode] = useState("cash");
@@ -511,6 +517,7 @@ function PaymentDialog({
       const { error: itemsErr } = await supabase.from("sale_items").insert(items);
       if (itemsErr) throw itemsErr;
 
+      const invoice_url = typeof window !== "undefined" ? `${window.location.origin}/i/${bill_no}` : undefined;
       await generateReceipt({
         bill_no, created_at: saleRows.created_at,
         customer_name: customerName, customer_phone: customerPhone,
@@ -522,14 +529,15 @@ function PaymentDialog({
         })),
         subtotal: totals.subtotal, taxTotal: totals.taxTotal,
         lineDiscount: totals.lineDisc, billDisc: totals.billDisc, grand: totals.grand,
+        invoice_url,
         shop: shop ? {
           shop_name: shop.shop_name, phone: shop.phone, address: shop.address,
-          gst_number: shop.gst_number, receipt_footer: shop.receipt_footer,
+          gst_number: shop.gst_number, upi_id: shop.upi_id, receipt_footer: shop.receipt_footer,
         } : undefined,
       });
 
       toast.success(`Bill ${bill_no} completed`);
-      onCompleted();
+      onCompleted(bill_no, customerPhone, totals.grand);
       onClose();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to complete");
@@ -596,6 +604,55 @@ function PaymentDialog({
             {loading ? <Loader2 className="size-4 animate-spin" /> : <Printer className="size-4" />}
             Complete & print
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ShareBillDialog({ info, onClose }: { info: { billNo: string; phone: string; total: number } | null; onClose: () => void }) {
+  const url = info && typeof window !== "undefined" ? `${window.location.origin}/i/${info.billNo}` : "";
+  const msg = info ? `Your bill ${info.billNo} for ${inr(info.total)} — view: ${url}` : "";
+  const waNumber = info?.phone?.replace(/\D/g, "") ?? "";
+  const waLink = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
+  return (
+    <Dialog open={!!info} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Share bill with customer</DialogTitle>
+          <DialogDescription>Bill <b>{info?.billNo}</b> · {info ? inr(info.total) : ""}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <div className="rounded-md border p-2 text-xs font-mono break-all bg-muted">{url}</div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={() => { navigator.clipboard?.writeText(url); toast.success("Link copied"); }}>
+              <Copy className="size-4" /> Copy link
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!waNumber}
+              onClick={() => window.open(waLink, "_blank", "noopener")}
+              title={waNumber ? "Share via WhatsApp" : "Add a customer phone first"}
+            >
+              <MessageCircle className="size-4" /> WhatsApp
+            </Button>
+            <Button
+              variant="outline"
+              className="col-span-2"
+              onClick={async () => {
+                if (navigator.share) {
+                  try { await navigator.share({ title: `Bill ${info?.billNo}`, text: msg, url }); }
+                  catch { /* user cancelled */ }
+                } else { navigator.clipboard?.writeText(url); toast.success("Link copied"); }
+              }}
+            >
+              <Share2 className="size-4" /> Share…
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">SMS gateway can be wired up later; use WhatsApp or share-sheet for now.</p>
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Done</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

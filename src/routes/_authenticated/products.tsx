@@ -49,6 +49,7 @@ function ProductsPage() {
   const [form, setForm] = useState<typeof empty>(empty);
   const [looking, setLooking] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [autoFillEnabled, setAutoFillEnabled] = useState(false);
   const lookupFn = useServerFn(lookupBarcode);
 
   const productsQ = useQuery({
@@ -266,8 +267,18 @@ function ProductsPage() {
                   <Button type="button" variant="outline" onClick={() => setScanOpen(true)}><Camera className="size-4" /> Scan</Button>
                 </div>
                 <div className="flex items-end">
-                  <Button type="button" variant="outline" onClick={() => autofill(form.barcode)} disabled={!form.barcode || looking}>
-                    {looking ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Auto-fill
+                  <Button
+                    type="button"
+                    variant={autoFillEnabled ? "default" : "outline"}
+                    onClick={() => {
+                      if (!autoFillEnabled) { setAutoFillEnabled(true); toast.info("Auto-fill enabled — click again to look up this barcode"); return; }
+                      autofill(form.barcode);
+                    }}
+                    disabled={autoFillEnabled && (!form.barcode || looking)}
+                    title={autoFillEnabled ? "Look up this barcode" : "Enable auto-fill (works best for international products)"}
+                  >
+                    {looking ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                    {autoFillEnabled ? "Look up" : "Auto-fill off"}
                   </Button>
                 </div>
               </div>
@@ -364,7 +375,11 @@ function ProductsPage() {
           <ScannerPanel
             active={scanOpen}
             onCameraError={() => setScanOpen(false)}
-            onScan={(code) => { setForm((f) => ({ ...f, barcode: code })); setScanOpen(false); autofill(code); }}
+            onScan={(code) => {
+              setForm((f) => ({ ...f, barcode: code }));
+              setScanOpen(false);
+              if (autoFillEnabled) autofill(code);
+            }}
           />
           <DialogFooter><Button variant="outline" onClick={() => setScanOpen(false)}>Close</Button></DialogFooter>
         </DialogContent>

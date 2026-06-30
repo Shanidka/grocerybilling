@@ -6,6 +6,7 @@ export interface ShopInfo {
   phone?: string | null;
   address?: string | null;
   gst_number?: string | null;
+  upi_id?: string | null;
   receipt_footer?: string | null;
 }
 
@@ -28,23 +29,27 @@ export interface ReceiptInput {
   billDisc: number;
   grand: number;
   shop?: ShopInfo;
+  /** Public invoice URL — encoded in the invoice QR */
+  invoice_url?: string;
 }
 
 export async function generateReceipt(r: ReceiptInput) {
   const shop: ShopInfo = r.shop ?? { shop_name: "My Supermarket" };
 
-  const qrPayload = JSON.stringify({
-    bill: r.bill_no,
-    at: r.created_at,
-    total: r.grand,
-    shop: shop.shop_name,
-    items: r.items.map((i) => ({ n: i.name, q: i.qty, p: i.unit_price, t: i.line_total })),
+  const invoiceQrPayload = r.invoice_url ?? JSON.stringify({
+    bill: r.bill_no, at: r.created_at, total: r.grand, shop: shop.shop_name,
   });
-  const qrDataUrl = await QRCode.toDataURL(qrPayload, { margin: 0, width: 160 });
+  const invoiceQr = await QRCode.toDataURL(invoiceQrPayload, { margin: 0, width: 160 });
+
+  let payQr: string | null = null;
+  if (shop.upi_id) {
+    const upi = `upi://pay?pa=${shop.upi_id}&pn=${encodeURIComponent(shop.shop_name)}&am=${r.grand.toFixed(2)}&cu=INR&tn=${encodeURIComponent("Bill " + r.bill_no)}`;
+    payQr = await QRCode.toDataURL(upi, { margin: 0, width: 160 });
+  }
 
   const W = 80;
   const headerLines = 1 + (shop.address ? Math.ceil(shop.address.length / 36) : 0) + (shop.phone || shop.gst_number ? 1 : 0);
-  const H = 60 + headerLines * 4 + r.items.length * 8 + 70;
+  const H = 60 + headerLines * 4 + r.items.length * 8 + 70 + (payQr ? 36 : 0);
   const doc = new jsPDF({ unit: "mm", format: [W, H] });
   let y = 8;
 
@@ -117,12 +122,27 @@ export async function generateReceipt(r: ReceiptInput) {
   right("Paid", `₹${r.paid_amount.toFixed(2)}`);
   if (r.change_amount > 0) right("Change", `₹${r.change_amount.toFixed(2)}`);
 
-  y += 4;
-  doc.addImage(qrDataUrl, "PNG", (W - 28) / 2, y, 28, 28);
-  y += 30;
-  doc.setFont("helvetica", "normal").setFontSize(7).setTextColor(120);
-  doc.text("Scan QR to view invoice details", W / 2, y, { align: "center" });
   y += 3;
+  if (payQr) {
+    // Two QRs side by side: pay (left) and invoice (right)
+    doc.addImage(payQr, "PNG", 6, y, 28, 28);
+    doc.addImage(invoiceQr, "PNG", W - 34, y, 28, 28);
+    y += 30;
+    doc.setFont("helvetica", "bold").setFontSize(7);
+    doc.text(`Pay ₹${r.grand.toFixed(2)}`, 20, y, { align: "center" });
+    doc.text("Invoice", W - 20, y, { align: "center" });
+    y += 4;
+    doc.setFont("helvetica", "normal").setFontSize(6).setTextColor(120);
+    doc.text("Scan to pay via UPI", 20, y, { align: "center" });
+    doc.text("Scan to view bill", W - 20, y, { align: "center" });
+    y += 4;
+  } else {
+    doc.addImage(invoiceQr, "PNG", (W - 28) / 2, y, 28, 28);
+    y += 30;
+    doc.setFont("helvetica", "normal").setFontSize(7).setTextColor(120);
+    doc.text("Scan QR to view invoice", W / 2, y, { align: "center" });
+    y += 3;
+  }
   if (shop.receipt_footer) {
     const wrapped = doc.splitTextToSize(shop.receipt_footer, W - 8);
     doc.text(wrapped, W / 2, y, { align: "center" });

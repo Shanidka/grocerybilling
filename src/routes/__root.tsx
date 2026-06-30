@@ -123,7 +123,6 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
-    // Lazy import to avoid SSR touching localStorage
     let unsub: (() => void) | undefined;
     import("../integrations/supabase/client").then(({ supabase }) => {
       const sub = supabase.auth.onAuthStateChange((event) => {
@@ -133,6 +132,7 @@ function RootComponent() {
       });
       unsub = () => sub.data.subscription.unsubscribe();
     });
+    import("../lib/sw-registration").then(({ registerAppSW }) => { void registerAppSW(); });
     return () => unsub?.();
   }, [router, queryClient]);
 

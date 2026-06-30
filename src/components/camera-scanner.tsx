@@ -89,7 +89,7 @@ export function ScannerPanel({ active, onScan, continuous, onCameraError }: Scan
             const text = result.getText();
             const fmt = BarcodeFormat[result.getBarcodeFormat()] ?? "Unknown";
             const now = Date.now();
-            if (lastHitRef.current && lastHitRef.current.code === text && now - lastHitRef.current.t < 1500) return;
+            if (lastHitRef.current && lastHitRef.current.code === text && now - lastHitRef.current.t < 600) return;
             lastHitRef.current = { code: text, t: now };
             setLastFormat(fmt);
             setLastCode(text);
