@@ -39,7 +39,7 @@ function ReportsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sales")
-        .select("id,grand_total,tax_total,discount_total,created_at,sale_items(qty,line_total,name,product_id)")
+        .select("id,grand_total,tax_total,line_discount,bill_discount,created_at,sale_items(qty,line_total,name,product_id)")
         .gte("created_at", start.toISOString())
         .lte("created_at", end.toISOString())
         .order("created_at", { ascending: true });
@@ -52,7 +52,7 @@ function ReportsPage() {
     const rows = sales.data ?? [];
     const gross = rows.reduce((s, r) => s + Number(r.grand_total), 0);
     const gst = rows.reduce((s, r) => s + Number(r.tax_total), 0);
-    const disc = rows.reduce((s, r) => s + Number(r.discount_total), 0);
+    const disc = rows.reduce((s, r) => s + Number(r.line_discount) + Number(r.bill_discount), 0);
     return { gross, gst, disc, count: rows.length };
   }, [sales.data]);
 
