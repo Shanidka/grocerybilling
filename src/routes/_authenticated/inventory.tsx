@@ -236,14 +236,28 @@ function DamagedTab() {
     },
   });
   const [open, setOpen] = useState(false);
-  const [pid, setPid] = useState(""); const [qty, setQty] = useState(""); const [reason, setReason] = useState(""); const [loss, setLoss] = useState("");
+  const [scanOpen, setScanOpen] = useState(false);
+  const [pid, setPid] = useState(""); const [qty, setQty] = useState("1"); const [reason, setReason] = useState(""); const [loss, setLoss] = useState("");
+  const applyProduct = (product_id: string, quantity?: string) => {
+    const p = products?.find((x) => x.id === product_id);
+    setPid(product_id);
+    const q = quantity ?? qty;
+    if (p) setLoss((Number(q || 0) * Number(p.purchase_price || 0)).toFixed(2));
+  };
+  const onScan = (code: string) => {
+    const p = products?.find((x) => x.barcode === code);
+    if (!p) { toast.error(`No product for ${code}`); return; }
+    applyProduct(p.id);
+    toast.success(`Loaded ${p.name}`);
+    setScanOpen(false);
+  };
   const save = async () => {
     if (!pid || !qty) return toast.error("Product and qty required");
     const { data: u } = await supabase.auth.getUser();
     const { error } = await supabase.from("damaged_products").insert({ product_id: pid, qty: Number(qty), reason, loss_value: Number(loss || 0), created_by: u.user!.id });
     if (error) return toast.error(error.message);
     toast.success("Damage logged");
-    setOpen(false); setPid(""); setQty(""); setReason(""); setLoss("");
+    setOpen(false); setPid(""); setQty("1"); setReason(""); setLoss("");
     qc.invalidateQueries({ queryKey: ["inv-damaged"] }); qc.invalidateQueries({ queryKey: ["inv-products"] });
   };
   return (
@@ -254,20 +268,26 @@ function DamagedTab() {
           <DialogContent>
             <DialogHeader><DialogTitle>Damaged / expired stock</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <div><Label>Product</Label>
-                <Select value={pid} onValueChange={setPid}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                  <SelectContent>{products?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                </Select>
+              <div className="flex gap-2 items-end">
+                <div className="flex-1"><Label>Product</Label>
+                  <Select value={pid} onValueChange={(v) => applyProduct(v)}>
+                    <SelectTrigger><SelectValue placeholder="Select or scan" /></SelectTrigger>
+                    <SelectContent>{products?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <Button type="button" variant="outline" onClick={() => setScanOpen(true)}><Camera className="size-4" /> Scan</Button>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Qty</Label><Input type="number" step="0.001" value={qty} onChange={(e) => setQty(e.target.value)} /></div>
+                <div><Label>Qty</Label><Input type="number" step="0.001" value={qty} onChange={(e) => { setQty(e.target.value); if (pid) applyProduct(pid, e.target.value); }} /></div>
                 <div><Label>Loss value (₹)</Label><Input type="number" step="0.01" value={loss} onChange={(e) => setLoss(e.target.value)} /></div>
               </div>
+              <div className="text-xs text-muted-foreground">Loss auto-filled from purchase price × qty. Edit if needed.</div>
               <div><Label>Reason</Label><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="expired, spillage, breakage…" /></div>
             </div>
             <DialogFooter><Button onClick={save}>Save</Button></DialogFooter>
           </DialogContent>
         </Dialog>
+        <CameraScanner open={scanOpen} onClose={() => setScanOpen(false)} onScan={onScan} title="Scan damaged item" />
       </div>
       <Card className="p-0 overflow-hidden">
         {!q.data?.length ? <div className="p-8 text-center text-sm text-muted-foreground">Nothing logged.</div> : (
