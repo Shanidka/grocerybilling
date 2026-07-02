@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { inr } from "@/lib/format";
-import { Plus } from "lucide-react";
+import { Plus, Camera } from "lucide-react";
+import { CameraScanner } from "@/components/camera-scanner";
 
 export const Route = createFileRoute("/_authenticated/inventory")({
   ssr: false,
@@ -48,7 +49,9 @@ function useProductsList() {
   return useQuery({
     queryKey: ["inv-products"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("products").select("id,name,unit,purchase_price,selling_price,stock_qty").eq("is_active", true).order("name");
+      const { data, error } = await supabase.from("products")
+        .select("id,name,unit,barcode,purchase_price,selling_price,stock_qty")
+        .eq("is_active", true).order("name");
       if (error) throw error;
       return data ?? [];
     },
