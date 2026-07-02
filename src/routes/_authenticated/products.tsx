@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,7 +10,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScannerPanel } from "@/components/camera-scanner";
 import { Package, Plus, Search, Sparkles, Loader2, Camera, Pencil, Trash2 } from "lucide-react";
@@ -96,7 +95,6 @@ function ProductsPage() {
     setOpen(true);
   };
 
-  // Two-way margin <-> selling
   const recalcFromMargin = (margin: string) => {
     const cost = parseFloat(form.purchase_price) || 0;
     const m = parseFloat(margin) || 0;
@@ -115,10 +113,7 @@ function ProductsPage() {
     setLooking(true);
     try {
       const r = await lookupFn({ data: { barcode } });
-      if (r.source === "none") {
-        toast.info(`No info found for ${barcode}. Enter manually.`);
-        return;
-      }
+      if (r.source === "none") { toast.info(`No info for ${barcode}. Enter manually.`); return; }
       setForm((f) => ({
         ...f,
         name: f.name || r.name || "",
@@ -126,9 +121,8 @@ function ProductsPage() {
         net_weight_g: f.net_weight_g || (r.net_weight_g ? String(r.net_weight_g) : ""),
       }));
       toast.success(`Auto-filled from ${r.source === "openfoodfacts" ? "OpenFoodFacts" : "AI"}`);
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Lookup failed");
-    } finally { setLooking(false); }
+    } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Lookup failed"); }
+    finally { setLooking(false); }
   };
 
   const save = async () => {
@@ -163,6 +157,7 @@ function ProductsPage() {
     setOpen(false);
     qc.invalidateQueries({ queryKey: ["all-products"] });
     qc.invalidateQueries({ queryKey: ["billing-products"] });
+    qc.invalidateQueries({ queryKey: ["inv-products"] });
   };
 
   const remove = async (p: ProductRow) => {
@@ -203,40 +198,45 @@ function ProductsPage() {
                 <TableHead className="text-right">MRP</TableHead>
                 <TableHead className="text-right">Price</TableHead>
                 <TableHead className="text-right">Stock</TableHead>
+                <TableHead className="text-right">Required</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((p) => (
-                <TableRow key={p.id} className={!p.is_active ? "opacity-50" : ""}>
-                  <TableCell>
-                    <div className="font-medium">{p.name}</div>
-                    <div className="text-xs text-muted-foreground">{p.brand ?? "—"}</div>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">{p.barcode ?? "—"}</TableCell>
-                  <TableCell>
-                    {p.sold_by === "weight"
-                      ? <Badge variant="outline">per kg</Badge>
-                      : <Badge variant="outline">unit</Badge>}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{inr(p.purchase_price)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{inr(p.mrp)}</TableCell>
-                  <TableCell className="text-right tabular-nums font-medium">
-                    {p.sold_by === "weight" ? `${inr(p.price_per_kg)}/kg` : inr(p.selling_price)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    <span className={Number(p.stock_qty) <= Number(p.min_qty) ? "text-destructive font-semibold" : ""}>
-                      {Number(p.stock_qty)} {p.unit}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button size="icon" variant="ghost" onClick={() => openEdit(p)}><Pencil className="size-4" /></Button>
-                    <Button size="icon" variant="ghost" className="text-destructive" onClick={() => remove(p)}><Trash2 className="size-4" /></Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {filtered.map((p) => {
+                const required = Math.max(0, Number(p.max_qty) - Number(p.stock_qty));
+                return (
+                  <TableRow key={p.id} className={!p.is_active ? "opacity-50" : ""}>
+                    <TableCell>
+                      <div className="font-medium">{p.name}</div>
+                      <div className="text-xs text-muted-foreground">{p.brand ?? "—"}</div>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{p.barcode ?? "—"}</TableCell>
+                    <TableCell>
+                      {p.sold_by === "weight" ? <Badge variant="outline">per kg</Badge> : <Badge variant="outline">unit</Badge>}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{inr(p.purchase_price)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{inr(p.mrp)}</TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">
+                      {p.sold_by === "weight" ? `${inr(p.price_per_kg)}/kg` : inr(p.selling_price)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      <span className={Number(p.stock_qty) <= Number(p.min_qty) && Number(p.min_qty) > 0 ? "text-destructive font-semibold" : ""}>
+                        {Number(p.stock_qty)} {p.unit}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {required > 0 ? <span className="text-warning font-medium">{required} {p.unit}</span> : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button size="icon" variant="ghost" onClick={() => openEdit(p)}><Pencil className="size-4" /></Button>
+                      <Button size="icon" variant="ghost" className="text-destructive" onClick={() => remove(p)}><Trash2 className="size-4" /></Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
               {filtered.length === 0 && (
-                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-10">No products yet.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-10">No products yet.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -244,44 +244,36 @@ function ProductsPage() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit product" : "Add product"}</DialogTitle>
-            <DialogDescription>Scan a barcode to auto-fill name &amp; weight when possible.</DialogDescription>
+            <DialogDescription>All product details on one page — scan the barcode to start.</DialogDescription>
           </DialogHeader>
 
-          <Tabs defaultValue="basic">
-            <TabsList className="grid grid-cols-3 w-full">
-              <TabsTrigger value="basic">Basics</TabsTrigger>
-              <TabsTrigger value="pricing">Pricing</TabsTrigger>
-              <TabsTrigger value="stock">Stock &amp; Dates</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="basic" className="space-y-3 pt-4">
-              <div className="grid sm:grid-cols-[1fr_auto_auto] gap-2">
-                <div>
-                  <Label className="text-xs">Barcode</Label>
-                  <Input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} placeholder="8901234567890" />
-                </div>
-                <div className="flex items-end">
-                  <Button type="button" variant="outline" onClick={() => setScanOpen(true)}><Camera className="size-4" /> Scan</Button>
-                </div>
-                <div className="flex items-end">
-                  <Button
-                    type="button"
-                    variant={autoFillEnabled ? "default" : "outline"}
-                    onClick={() => {
-                      if (!autoFillEnabled) { setAutoFillEnabled(true); toast.info("Auto-fill enabled — click again to look up this barcode"); return; }
-                      autofill(form.barcode);
-                    }}
-                    disabled={autoFillEnabled && (!form.barcode || looking)}
-                    title={autoFillEnabled ? "Look up this barcode" : "Enable auto-fill (works best for international products)"}
-                  >
-                    {looking ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-                    {autoFillEnabled ? "Look up" : "Auto-fill off"}
-                  </Button>
-                </div>
+          <div className="space-y-6 pt-2">
+            {/* Barcode row */}
+            <div className="grid sm:grid-cols-[1fr_auto_auto] gap-2 items-end">
+              <div>
+                <Label className="text-xs">Barcode</Label>
+                <Input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} placeholder="8901234567890" />
               </div>
+              <Button type="button" variant="outline" onClick={() => setScanOpen(true)}><Camera className="size-4" /> Scan</Button>
+              <Button
+                type="button"
+                variant={autoFillEnabled ? "default" : "outline"}
+                onClick={() => {
+                  if (!autoFillEnabled) { setAutoFillEnabled(true); toast.info("Auto-fill enabled — click again to look up"); return; }
+                  autofill(form.barcode);
+                }}
+                disabled={autoFillEnabled && (!form.barcode || looking)}
+              >
+                {looking ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                {autoFillEnabled ? "Look up" : "Auto-fill off"}
+              </Button>
+            </div>
+
+            {/* Basics */}
+            <Section title="Basics">
               <div className="grid sm:grid-cols-2 gap-3">
                 <Field label="Name *"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
                 <Field label="Brand"><Input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} /></Field>
@@ -307,16 +299,13 @@ function ProductsPage() {
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field label="Net weight (g)">
-                  <Input type="number" value={form.net_weight_g} onChange={(e) => setForm({ ...form, net_weight_g: e.target.value })} placeholder="e.g. 500" />
-                </Field>
-                <Field label="GST %">
-                  <Input type="number" value={form.tax_pct} onChange={(e) => setForm({ ...form, tax_pct: e.target.value })} />
-                </Field>
+                <Field label="Net weight (g)"><Input type="number" value={form.net_weight_g} onChange={(e) => setForm({ ...form, net_weight_g: e.target.value })} placeholder="e.g. 500" /></Field>
+                <Field label="GST %"><Input type="number" value={form.tax_pct} onChange={(e) => setForm({ ...form, tax_pct: e.target.value })} /></Field>
               </div>
-            </TabsContent>
+            </Section>
 
-            <TabsContent value="pricing" className="space-y-3 pt-4">
+            {/* Pricing */}
+            <Section title="Pricing">
               <Field label="Sold by">
                 <Select value={form.sold_by} onValueChange={(v) => setForm({ ...form, sold_by: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -327,31 +316,22 @@ function ProductsPage() {
                 </Select>
               </Field>
               {form.sold_by === "unit" ? (
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <Field label="Purchase price (cost)">
-                    <Input type="number" value={form.purchase_price} onChange={(e) => { setForm({ ...form, purchase_price: e.target.value }); }} />
-                  </Field>
+                <div className="grid sm:grid-cols-2 gap-3 mt-3">
+                  <Field label="Purchase price (cost)"><Input type="number" value={form.purchase_price} onChange={(e) => setForm({ ...form, purchase_price: e.target.value })} /></Field>
                   <Field label="MRP"><Input type="number" value={form.mrp} onChange={(e) => setForm({ ...form, mrp: e.target.value })} /></Field>
-                  <Field label="Margin %">
-                    <Input type="number" value={form.margin_pct} onChange={(e) => recalcFromMargin(e.target.value)} placeholder="auto from selling" />
-                  </Field>
-                  <Field label="Selling price">
-                    <Input type="number" value={form.selling_price} onChange={(e) => recalcFromSelling(e.target.value)} />
-                  </Field>
+                  <Field label="Margin %"><Input type="number" value={form.margin_pct} onChange={(e) => recalcFromMargin(e.target.value)} placeholder="auto from selling" /></Field>
+                  <Field label="Selling price"><Input type="number" value={form.selling_price} onChange={(e) => recalcFromSelling(e.target.value)} /></Field>
                 </div>
               ) : (
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <Field label="Purchase price per kg">
-                    <Input type="number" value={form.purchase_price} onChange={(e) => setForm({ ...form, purchase_price: e.target.value })} />
-                  </Field>
-                  <Field label="Selling price per kg *">
-                    <Input type="number" value={form.price_per_kg} onChange={(e) => setForm({ ...form, price_per_kg: e.target.value })} />
-                  </Field>
+                <div className="grid sm:grid-cols-2 gap-3 mt-3">
+                  <Field label="Purchase price per kg"><Input type="number" value={form.purchase_price} onChange={(e) => setForm({ ...form, purchase_price: e.target.value })} /></Field>
+                  <Field label="Selling price per kg *"><Input type="number" value={form.price_per_kg} onChange={(e) => setForm({ ...form, price_per_kg: e.target.value })} /></Field>
                 </div>
               )}
-            </TabsContent>
+            </Section>
 
-            <TabsContent value="stock" className="space-y-3 pt-4">
+            {/* Stock & Dates */}
+            <Section title="Stock & Dates">
               <div className="grid sm:grid-cols-3 gap-3">
                 <Field label="Stock qty"><Input type="number" value={form.stock_qty} onChange={(e) => setForm({ ...form, stock_qty: e.target.value })} /></Field>
                 <Field label="Min qty (alert)"><Input type="number" value={form.min_qty} onChange={(e) => setForm({ ...form, min_qty: e.target.value })} /></Field>
@@ -359,8 +339,11 @@ function ProductsPage() {
                 <Field label="Manufacturing date"><Input type="date" value={form.mfg_date} onChange={(e) => setForm({ ...form, mfg_date: e.target.value })} /></Field>
                 <Field label="Expiry date"><Input type="date" value={form.expiry_date} onChange={(e) => setForm({ ...form, expiry_date: e.target.value })} /></Field>
               </div>
-            </TabsContent>
-          </Tabs>
+              {form.max_qty && form.stock_qty && Number(form.max_qty) > Number(form.stock_qty) && (
+                <div className="text-xs text-muted-foreground mt-2">Required to reach max: <span className="font-medium text-warning">{Number(form.max_qty) - Number(form.stock_qty)} {form.unit}</span></div>
+              )}
+            </Section>
+          </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
@@ -389,9 +372,12 @@ function ProductsPage() {
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="space-y-1.5"><Label className="text-xs">{label}</Label>{children}</div>;
+}
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
+    <div className="border rounded-lg p-4">
+      <div className="font-semibold text-sm mb-3">{title}</div>
       {children}
     </div>
   );

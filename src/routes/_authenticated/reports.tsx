@@ -1,12 +1,14 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { inr } from "@/lib/format";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from "recharts";
+import { Receipt } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   ssr: false,
@@ -39,10 +41,10 @@ function ReportsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sales")
-        .select("id,grand_total,tax_total,line_discount,bill_discount,created_at,sale_items(qty,line_total,name,product_id)")
+        .select("id,bill_no,grand_total,tax_total,line_discount,bill_discount,payment_mode,customer_name,customer_phone,created_at,sale_items(qty,line_total,name,product_id)")
         .gte("created_at", start.toISOString())
         .lte("created_at", end.toISOString())
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
@@ -87,12 +89,13 @@ function ReportsPage() {
   }, [sales.data]);
 
   const totalRev = perProduct.reduce((s, p) => s + p.revenue, 0) || 1;
+  const bills = sales.data ?? [];
 
   return (
     <div className="p-6 lg:p-8 space-y-6 max-w-6xl">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
-        <p className="text-sm text-muted-foreground">Filter by date range. Drill down per product below.</p>
+        <p className="text-sm text-muted-foreground">Bills auto-delete after 18 months. Filter by date range.</p>
       </div>
 
       <Card className="p-4 flex flex-wrap items-center gap-2">
@@ -108,72 +111,125 @@ function ReportsPage() {
         </div>
       </Card>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Kpi label="Gross sales" value={inr(stats.gross)} />
-        <Kpi label="Bills" value={String(stats.count)} />
-        <Kpi label="GST collected" value={inr(stats.gst)} />
-        <Kpi label="Discounts" value={inr(stats.disc)} />
-      </div>
+      <Tabs defaultValue="summary">
+        <TabsList>
+          <TabsTrigger value="summary">Summary</TabsTrigger>
+          <TabsTrigger value="bills">Bills ({bills.length})</TabsTrigger>
+          <TabsTrigger value="products">Per product</TabsTrigger>
+        </TabsList>
 
-      <Card className="p-5">
-        <h3 className="font-semibold mb-3">Sales trend</h3>
-        <div className="h-72">
-          <ResponsiveContainer>
-            <LineChart data={trend}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v: number) => inr(v)} />
-              <Line type="monotone" dataKey="total" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </Card>
-
-      <Card className="p-5">
-        <h3 className="font-semibold mb-3">Top 10 products</h3>
-        <div className="h-72">
-          <ResponsiveContainer>
-            <BarChart data={perProduct.slice(0, 10)}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={70} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v: number) => inr(v)} />
-              <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </Card>
-
-      <Card className="p-0 overflow-hidden">
-        <div className="p-4 font-semibold border-b">Per-product sales</div>
-        {perProduct.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">No sales in this range.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left">
-                <tr>
-                  <th className="px-4 py-2.5 font-medium text-muted-foreground">Product</th>
-                  <th className="px-4 py-2.5 font-medium text-muted-foreground">Qty sold</th>
-                  <th className="px-4 py-2.5 font-medium text-muted-foreground">Revenue</th>
-                  <th className="px-4 py-2.5 font-medium text-muted-foreground">% of total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {perProduct.map((p) => (
-                  <tr key={p.name}>
-                    <td className="px-4 py-3">{p.name}</td>
-                    <td className="px-4 py-3">{p.qty.toFixed(2)}</td>
-                    <td className="px-4 py-3">{inr(p.revenue)}</td>
-                    <td className="px-4 py-3">{((p.revenue / totalRev) * 100).toFixed(1)}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <TabsContent value="summary" className="space-y-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Kpi label="Gross sales" value={inr(stats.gross)} />
+            <Kpi label="Bills" value={String(stats.count)} />
+            <Kpi label="GST collected" value={inr(stats.gst)} />
+            <Kpi label="Discounts" value={inr(stats.disc)} />
           </div>
-        )}
-      </Card>
+
+          <Card className="p-5">
+            <h3 className="font-semibold mb-3">Sales trend</h3>
+            <div className="h-72">
+              <ResponsiveContainer>
+                <LineChart data={trend}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(v: number) => inr(v)} />
+                  <Line type="monotone" dataKey="total" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <h3 className="font-semibold mb-3">Top 10 products</h3>
+            <div className="h-72">
+              <ResponsiveContainer>
+                <BarChart data={perProduct.slice(0, 10)}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={70} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(v: number) => inr(v)} />
+                  <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="bills">
+          <Card className="p-0 overflow-hidden">
+            {bills.length === 0 ? (
+              <div className="p-8 text-center text-sm text-muted-foreground">No bills in this range.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-left">
+                    <tr>
+                      <th className="px-4 py-2.5 font-medium text-muted-foreground">Bill #</th>
+                      <th className="px-4 py-2.5 font-medium text-muted-foreground">Date</th>
+                      <th className="px-4 py-2.5 font-medium text-muted-foreground">Customer</th>
+                      <th className="px-4 py-2.5 font-medium text-muted-foreground">Items</th>
+                      <th className="px-4 py-2.5 font-medium text-muted-foreground">Payment</th>
+                      <th className="px-4 py-2.5 font-medium text-muted-foreground text-right">Total</th>
+                      <th className="px-4 py-2.5"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {bills.map((b) => (
+                      <tr key={b.id}>
+                        <td className="px-4 py-3 font-mono text-xs">{b.bill_no}</td>
+                        <td className="px-4 py-3">{new Date(b.created_at).toLocaleString("en-IN")}</td>
+                        <td className="px-4 py-3">{b.customer_name ?? "—"}{b.customer_phone ? ` · ${b.customer_phone}` : ""}</td>
+                        <td className="px-4 py-3">{(b.sale_items as unknown[])?.length ?? 0}</td>
+                        <td className="px-4 py-3 capitalize">{b.payment_mode}</td>
+                        <td className="px-4 py-3 text-right tabular-nums font-medium">{inr(b.grand_total)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <Button asChild size="sm" variant="ghost">
+                            <Link to="/i/$billNo" params={{ billNo: b.bill_no }} target="_blank"><Receipt className="size-3.5" /> View</Link>
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="products">
+          <Card className="p-0 overflow-hidden">
+            <div className="p-4 font-semibold border-b">Per-product sales</div>
+            {perProduct.length === 0 ? (
+              <div className="p-8 text-center text-sm text-muted-foreground">No sales in this range.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-left">
+                    <tr>
+                      <th className="px-4 py-2.5 font-medium text-muted-foreground">Product</th>
+                      <th className="px-4 py-2.5 font-medium text-muted-foreground">Qty sold</th>
+                      <th className="px-4 py-2.5 font-medium text-muted-foreground">Revenue</th>
+                      <th className="px-4 py-2.5 font-medium text-muted-foreground">% of total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {perProduct.map((p) => (
+                      <tr key={p.name}>
+                        <td className="px-4 py-3">{p.name}</td>
+                        <td className="px-4 py-3">{p.qty.toFixed(2)}</td>
+                        <td className="px-4 py-3">{inr(p.revenue)}</td>
+                        <td className="px-4 py-3">{((p.revenue / totalRev) * 100).toFixed(1)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

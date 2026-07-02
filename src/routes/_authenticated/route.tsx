@@ -8,12 +8,26 @@ import { useMyRoles } from "@/hooks/use-role";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+const INACTIVITY_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) throw redirect({ to: "/auth" });
-    return { user: data.user };
+    // Use getSession() so auth works offline (reads from localStorage; no network required)
+    const { data: sess } = await supabase.auth.getSession();
+    if (!sess.session) throw redirect({ to: "/auth" });
+
+    // 24-hour inactivity auto-logout
+    try {
+      const last = Number(localStorage.getItem("bz_last_activity") ?? "0");
+      if (last && Date.now() - last > INACTIVITY_MS) {
+        await supabase.auth.signOut();
+        localStorage.removeItem("bz_last_activity");
+        throw redirect({ to: "/auth" });
+      }
+    } catch { /* ignore storage errors */ }
+
+    return { user: sess.session.user };
   },
   component: AppShell,
 });
@@ -43,6 +57,16 @@ function AppShell() {
     return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
   }, []);
 
+  // Track activity to power 24-hour inactivity auto-logout
+  useEffect(() => {
+    const touch = () => { try { localStorage.setItem("bz_last_activity", String(Date.now())); } catch { /* noop */ } };
+    touch();
+    const evts = ["click", "keydown", "touchstart", "mousemove", "visibilitychange"];
+    evts.forEach((e) => window.addEventListener(e, touch, { passive: true }));
+    const iv = setInterval(touch, 60_000);
+    return () => { evts.forEach((e) => window.removeEventListener(e, touch)); clearInterval(iv); };
+  }, []);
+
   // Low stock toast
   useQuery({
     queryKey: ["low-stock-alert"],
@@ -62,7 +86,7 @@ function AppShell() {
       }
       return low;
     },
-    refetchInterval: 60000,
+    refetchInterval: 2 * 60 * 60 * 1000, // every 2 hours
   });
 
   const signOut = async () => {
@@ -106,10 +130,6 @@ function AppShell() {
               </Link>
             );
           })}
-          <div className="mt-4 px-3 text-[10px] uppercase tracking-wider text-sidebar-foreground/40">Coming next</div>
-          {["Inventory", "Reports", "Alerts", "Staff"].map((l) => (
-            <div key={l} className="px-3 py-2 text-sm text-sidebar-foreground/40 cursor-not-allowed">{l}</div>
-          ))}
         </nav>
         <div className="p-3 border-t border-sidebar-border space-y-2">
           {!online && (
