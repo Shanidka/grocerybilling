@@ -89,7 +89,14 @@ export function ScannerPanel({ active, onScan, continuous, onCameraError }: Scan
             const text = result.getText();
             const fmt = BarcodeFormat[result.getBarcodeFormat()] ?? "Unknown";
             const now = Date.now();
-            if (lastHitRef.current && lastHitRef.current.code === text && now - lastHitRef.current.t < 600) return;
+            // Guard against ZXing firing the same barcode every video frame.
+            // Same code within 4s → ignore. Any code within 600ms → ignore (dedupe frame bursts).
+            const sameWindow = continuous ? 4000 : 2500;
+            if (lastHitRef.current) {
+              const dt = now - lastHitRef.current.t;
+              if (lastHitRef.current.code === text && dt < sameWindow) return;
+              if (dt < 600) return;
+            }
             lastHitRef.current = { code: text, t: now };
             setLastFormat(fmt);
             setLastCode(text);

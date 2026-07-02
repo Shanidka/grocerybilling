@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { AlertTriangle, CalendarClock, PackageX } from "lucide-react";
 import { inr } from "@/lib/format";
 
@@ -12,6 +14,8 @@ export const Route = createFileRoute("/_authenticated/alerts")({
   component: AlertsPage,
   head: () => ({ meta: [{ title: "Alerts — Bazaar POS" }] }),
 });
+
+type ExpiryBucket = "expired" | "7d" | "30d" | "90d" | "all";
 
 function AlertsPage() {
   const q = useQuery({
@@ -24,37 +28,49 @@ function AlertsPage() {
       if (error) throw error;
       return data ?? [];
     },
-    refetchInterval: 60000,
+    refetchInterval: 2 * 60 * 60 * 1000, // 2 hours
   });
 
   const products = q.data ?? [];
   const today = new Date();
-  const in30 = new Date(); in30.setDate(today.getDate() + 30);
   const dead = new Date(); dead.setDate(today.getDate() - 60);
 
   const low = products.filter((p) => Number(p.min_qty) > 0 && Number(p.stock_qty) <= Number(p.min_qty));
-  const expiring = products
-    .filter((p) => p.expiry_date && new Date(p.expiry_date) <= in30)
-    .sort((a, b) => new Date(a.expiry_date!).getTime() - new Date(b.expiry_date!).getTime());
   const deadStock = products.filter((p) => Number(p.stock_qty) > 0 && (!p.last_sold_at || new Date(p.last_sold_at) <= dead));
+
+  const [bucket, setBucket] = useState<ExpiryBucket>("30d");
+  const expiring = useMemo(() => {
+    return products
+      .filter((p) => p.expiry_date)
+      .map((p) => ({ ...p, days: Math.ceil((new Date(p.expiry_date!).getTime() - today.getTime()) / 86400000) }))
+      .filter((p) => {
+        if (bucket === "expired") return p.days < 0;
+        if (bucket === "7d") return p.days >= 0 && p.days <= 7;
+        if (bucket === "30d") return p.days >= 0 && p.days <= 30;
+        if (bucket === "90d") return p.days >= 0 && p.days <= 90;
+        return true;
+      })
+      .sort((a, b) => a.days - b.days);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products, bucket]);
 
   return (
     <div className="p-6 lg:p-8 space-y-6 max-w-6xl">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Alerts</h1>
-        <p className="text-sm text-muted-foreground">Low stock, expiring, and dead stock — check daily.</p>
+        <p className="text-sm text-muted-foreground">Auto-refresh every 2 hours. Click a range to drill into expiry.</p>
       </div>
 
       <div className="grid sm:grid-cols-3 gap-4">
         <StatCard icon={AlertTriangle} label="Low stock" count={low.length} tone="warning" />
-        <StatCard icon={CalendarClock} label="Expiring ≤ 30 days" count={expiring.length} tone="warning" />
+        <StatCard icon={CalendarClock} label="Expiring ≤ 30 days" count={products.filter(p => p.expiry_date && (new Date(p.expiry_date).getTime() - today.getTime())/86400000 <= 30 && (new Date(p.expiry_date).getTime() - today.getTime())/86400000 >= 0).length} tone="warning" />
         <StatCard icon={PackageX} label="Dead stock (60d)" count={deadStock.length} tone="danger" />
       </div>
 
       <Tabs defaultValue="low">
         <TabsList>
           <TabsTrigger value="low">Low stock ({low.length})</TabsTrigger>
-          <TabsTrigger value="expiring">Expiring ({expiring.length})</TabsTrigger>
+          <TabsTrigger value="expiring">Expiry</TabsTrigger>
           <TabsTrigger value="dead">Dead stock ({deadStock.length})</TabsTrigger>
         </TabsList>
 
@@ -74,21 +90,29 @@ function AlertsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="expiring">
+        <TabsContent value="expiring" className="space-y-4">
+          <div className="flex gap-2 flex-wrap">
+            {([
+              ["expired", "Already expired"],
+              ["7d", "Next 7 days"],
+              ["30d", "Next 30 days"],
+              ["90d", "Next 90 days"],
+              ["all", "All with expiry"],
+            ] as [ExpiryBucket, string][]).map(([k, label]) => (
+              <Button key={k} size="sm" variant={bucket === k ? "default" : "outline"} onClick={() => setBucket(k)}>{label}</Button>
+            ))}
+          </div>
           <Card className="p-0 overflow-hidden">
             <Table
-              headers={["Product", "Expiry", "Days left", "Stock"]}
-              rows={expiring.map((p) => {
-                const d = new Date(p.expiry_date!);
-                const days = Math.ceil((d.getTime() - today.getTime()) / 86400000);
-                return [
-                  <div key="n"><div className="font-medium">{p.name}</div>{p.brand && <div className="text-xs text-muted-foreground">{p.brand}</div>}</div>,
-                  <>{p.expiry_date}</>,
-                  <Badge variant={days < 0 ? "destructive" : days <= 7 ? "destructive" : "secondary"}>{days < 0 ? `expired ${-days}d` : `${days}d`}</Badge>,
-                  <>{Number(p.stock_qty)} {p.unit}</>,
-                ];
-              })}
-              empty="Nothing expiring in the next 30 days."
+              headers={["Product", "Expiry", "Days", "Stock", "Value"]}
+              rows={expiring.map((p) => [
+                <div key="n"><div className="font-medium">{p.name}</div>{p.brand && <div className="text-xs text-muted-foreground">{p.brand}</div>}</div>,
+                <>{p.expiry_date}</>,
+                <Badge variant={p.days < 0 || p.days <= 7 ? "destructive" : "secondary"}>{p.days < 0 ? `expired ${-p.days}d ago` : `${p.days}d left`}</Badge>,
+                <>{Number(p.stock_qty)} {p.unit}</>,
+                inr(Number(p.stock_qty) * Number(p.selling_price)),
+              ])}
+              empty="Nothing in this range."
             />
           </Card>
         </TabsContent>
