@@ -34,7 +34,7 @@ type Product = {
 type CartLine = {
   product_id: string; name: string; unit_price: number; qty: number;
   tax_pct: number; discount: number; stock_qty: number;
-  sold_by: string; unit: string;
+  sold_by: string; unit: string; mrp: number;
 };
 
 const PAYMENT_MODES = [
