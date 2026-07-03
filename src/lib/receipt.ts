@@ -21,7 +21,7 @@ export interface ReceiptInput {
   change_amount: number;
   items: {
     name: string; qty: number; unit_price: number; tax_pct: number;
-    line_discount: number; line_total: number;
+    line_discount: number; line_total: number; mrp?: number;
   }[];
   subtotal: number;
   taxTotal: number;
@@ -29,7 +29,6 @@ export interface ReceiptInput {
   billDisc: number;
   grand: number;
   shop?: ShopInfo;
-  /** Public invoice URL — encoded in the invoice QR */
   invoice_url?: string;
 }
 
