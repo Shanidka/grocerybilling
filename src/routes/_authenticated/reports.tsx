@@ -115,6 +115,9 @@ function ReportsPage() {
           <span className="text-muted-foreground">→</span>
           <Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPreset("custom"); }} className="w-40" />
         </div>
+        <Button size="sm" variant="secondary" className="ml-auto" onClick={() => exportMonthlyGSTCSV(bills, start, end)}>
+          <Download className="size-4" /> Monthly GST CSV
+        </Button>
       </Card>
 
       <Tabs defaultValue="summary">
