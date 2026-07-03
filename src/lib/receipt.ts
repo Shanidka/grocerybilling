@@ -62,7 +62,7 @@ export async function generateReceipt(r: ReceiptInput) {
   }
   const line2 = [shop.phone ? `Ph: ${shop.phone}` : null, shop.gst_number ? `GSTIN: ${shop.gst_number}` : null].filter(Boolean).join(" · ");
   if (line2) { doc.text(line2, W / 2, y, { align: "center" }); y += 4; }
-  doc.text("Tax Invoice", W / 2, y, { align: "center" }); y += 4;
+  doc.text("Retail Invoice", W / 2, y, { align: "center" }); y += 4;
 
   doc.setLineDashPattern([0.5, 0.5], 0);
   doc.line(4, y, W - 4, y); y += 4;
