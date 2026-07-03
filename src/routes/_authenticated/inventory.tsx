@@ -30,16 +30,20 @@ function InventoryPage() {
       </div>
 
       <Tabs defaultValue="purchases">
-        <TabsList>
+        <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="purchases">Purchases</TabsTrigger>
           <TabsTrigger value="adjustments">Adjustments</TabsTrigger>
           <TabsTrigger value="damaged">Damaged</TabsTrigger>
           <TabsTrigger value="returns">Returns</TabsTrigger>
+          <TabsTrigger value="belowmin">Below minimum</TabsTrigger>
+          <TabsTrigger value="expiring">About to expire</TabsTrigger>
         </TabsList>
         <TabsContent value="purchases"><PurchasesTab /></TabsContent>
         <TabsContent value="adjustments"><AdjustmentsTab /></TabsContent>
         <TabsContent value="damaged"><DamagedTab /></TabsContent>
         <TabsContent value="returns"><ReturnsTab /></TabsContent>
+        <TabsContent value="belowmin"><BelowMinTab /></TabsContent>
+        <TabsContent value="expiring"><ExpiringTab /></TabsContent>
       </Tabs>
     </div>
   );
@@ -381,6 +385,77 @@ function ReturnsTab() {
             <tbody className="divide-y">{q.data.map((r) => (
               <tr key={r.id}><td className="px-4 py-3">{new Date(r.created_at).toLocaleDateString("en-IN")}</td><td className="px-4 py-3">{(r.products as { name?: string } | null)?.name ?? "—"}</td><td className="px-4 py-3">{Number(r.qty)}</td><td className="px-4 py-3">{inr(r.refund_amount)}</td><td className="px-4 py-3">{r.reason ?? "—"}</td><td className="px-4 py-3">{r.restock ? "Yes" : "No"}</td></tr>
             ))}</tbody>
+          </table>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+/* Below minimum stock */
+function BelowMinTab() {
+  const q = useQuery({
+    queryKey: ["inv-belowmin"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("products")
+        .select("id,name,brand,unit,stock_qty,min_qty,max_qty,purchase_price").eq("is_active", true);
+      if (error) throw error;
+      return (data ?? []).filter((p) => Number(p.stock_qty) <= Number(p.min_qty) && Number(p.min_qty) > 0);
+    },
+    refetchInterval: 2 * 60 * 60 * 1000,
+  });
+  return (
+    <Card className="p-0 overflow-hidden">
+      {!q.data?.length ? <div className="p-8 text-center text-sm text-muted-foreground">All items above minimum. 🎉</div> : (
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50 text-left"><tr><th className="px-4 py-2.5">Product</th><th className="px-4 py-2.5">Brand</th><th className="px-4 py-2.5">Stock</th><th className="px-4 py-2.5">Min</th><th className="px-4 py-2.5">Need to reach max</th></tr></thead>
+          <tbody className="divide-y">{q.data.map((p) => (
+            <tr key={p.id}><td className="px-4 py-3">{p.name}</td><td className="px-4 py-3 text-muted-foreground">{p.brand ?? "—"}</td><td className="px-4 py-3 text-destructive font-medium">{Number(p.stock_qty)} {p.unit}</td><td className="px-4 py-3">{Number(p.min_qty)} {p.unit}</td><td className="px-4 py-3 text-warning font-medium">{Math.max(0, Number(p.max_qty) - Number(p.stock_qty))} {p.unit}</td></tr>
+          ))}</tbody>
+        </table>
+      )}
+    </Card>
+  );
+}
+
+/* Expiring soon */
+function ExpiringTab() {
+  const [days, setDays] = useState("30");
+  const q = useQuery({
+    queryKey: ["inv-expiring", days],
+    queryFn: async () => {
+      const until = new Date(); until.setDate(until.getDate() + Number(days || 30));
+      const { data, error } = await supabase.from("products")
+        .select("id,name,brand,unit,stock_qty,expiry_date").eq("is_active", true)
+        .not("expiry_date", "is", null).lte("expiry_date", until.toISOString().slice(0, 10))
+        .order("expiry_date");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 justify-end">
+        <Label className="text-xs">Within</Label>
+        <Select value={days} onValueChange={setDays}>
+          <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7">7 days</SelectItem>
+            <SelectItem value="15">15 days</SelectItem>
+            <SelectItem value="30">30 days</SelectItem>
+            <SelectItem value="60">60 days</SelectItem>
+            <SelectItem value="90">90 days</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <Card className="p-0 overflow-hidden">
+        {!q.data?.length ? <div className="p-8 text-center text-sm text-muted-foreground">Nothing expiring in this window.</div> : (
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-left"><tr><th className="px-4 py-2.5">Product</th><th className="px-4 py-2.5">Brand</th><th className="px-4 py-2.5">Stock</th><th className="px-4 py-2.5">Expires</th><th className="px-4 py-2.5">Days left</th></tr></thead>
+            <tbody className="divide-y">{q.data.map((p) => {
+              const dl = p.expiry_date ? Math.ceil((new Date(p.expiry_date).getTime() - Date.now()) / 86400000) : 0;
+              return <tr key={p.id}><td className="px-4 py-3">{p.name}</td><td className="px-4 py-3 text-muted-foreground">{p.brand ?? "—"}</td><td className="px-4 py-3">{Number(p.stock_qty)} {p.unit}</td><td className="px-4 py-3">{p.expiry_date}</td><td className={`px-4 py-3 font-medium ${dl < 7 ? "text-destructive" : "text-warning"}`}>{dl}d</td></tr>;
+            })}</tbody>
           </table>
         )}
       </Card>

@@ -1,7 +1,7 @@
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff, Package, Settings as SettingsIcon, AlertTriangle, BarChart3, Boxes } from "lucide-react";
+import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff, Package, Settings as SettingsIcon, AlertTriangle, BarChart3, Boxes, Users, Truck, UserCog } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useMyRoles } from "@/hooks/use-role";
@@ -32,15 +32,19 @@ export const Route = createFileRoute("/_authenticated")({
   component: AppShell,
 });
 
-const nav = [
+type Role = "admin" | "manager" | "cashier";
+const nav: Array<{ to: string; label: string; icon: typeof LayoutDashboard; roles?: Role[] }> = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/billing", label: "Billing", icon: ScanBarcode },
   { to: "/products", label: "Products", icon: Package },
   { to: "/inventory", label: "Inventory", icon: Boxes },
   { to: "/alerts", label: "Alerts", icon: AlertTriangle },
-  { to: "/reports", label: "Reports", icon: BarChart3 },
-  { to: "/settings", label: "Settings", icon: SettingsIcon },
-] as const;
+  { to: "/customers", label: "Customers", icon: Users },
+  { to: "/suppliers", label: "Suppliers", icon: Truck, roles: ["admin", "manager"] },
+  { to: "/reports", label: "Reports", icon: BarChart3, roles: ["admin", "manager"] },
+  { to: "/staff", label: "Staff", icon: UserCog, roles: ["admin"] },
+  { to: "/settings", label: "Settings", icon: SettingsIcon, roles: ["admin", "manager"] },
+];
 
 function AppShell() {
   const router = useRouter();
@@ -111,7 +115,7 @@ function AppShell() {
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-1">
-          {nav.map((n) => {
+          {nav.filter((n) => !n.roles || n.roles.some((r) => (roles ?? []).includes(r))).map((n) => {
             const active = pathname === n.to || pathname.startsWith(n.to + "/");
             const Icon = n.icon;
             return (

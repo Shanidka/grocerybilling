@@ -34,7 +34,7 @@ type Product = {
 type CartLine = {
   product_id: string; name: string; unit_price: number; qty: number;
   tax_pct: number; discount: number; stock_qty: number;
-  sold_by: string; unit: string;
+  sold_by: string; unit: string; mrp: number;
 };
 
 const PAYMENT_MODES = [
@@ -133,7 +133,7 @@ function Billing() {
         {
           product_id: p.id, name: p.name, unit_price,
           qty, tax_pct: Number(p.tax_pct), discount: 0, stock_qty: Number(p.stock_qty),
-          sold_by: p.sold_by, unit: isWeight ? "kg" : p.unit,
+          sold_by: p.sold_by, unit: isWeight ? "kg" : p.unit, mrp: Number(p.mrp || 0),
         },
       ];
     });
@@ -525,7 +525,7 @@ function PaymentDialog({
         items: cart.map((l) => ({
           name: l.name + (l.sold_by === "weight" ? ` (${l.qty.toFixed(3)}kg)` : ""),
           qty: l.qty, unit_price: l.unit_price, tax_pct: l.tax_pct,
-          line_discount: l.discount, line_total: l.unit_price * l.qty - l.discount,
+          line_discount: l.discount, line_total: l.unit_price * l.qty - l.discount, mrp: l.mrp,
         })),
         subtotal: totals.subtotal, taxTotal: totals.taxTotal,
         lineDiscount: totals.lineDisc, billDisc: totals.billDisc, grand: totals.grand,

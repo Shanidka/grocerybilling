@@ -6,22 +6,20 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-// Supported formats — broadened to cover retail 1D, postal, and 2D codes.
 export const SUPPORTED_FORMAT_NAMES = [
   "EAN_13", "EAN_8", "UPC_A", "UPC_E", "UPC_EAN_EXTENSION",
   "CODE_128", "CODE_93", "CODE_39", "CODABAR", "ITF", "RSS_14", "RSS_EXPANDED",
-  "QR_CODE", "DATA_MATRIX", "AZTEC", "PDF_417", "MAXICODE",
+  "QR_CODE", "DATA_MATRIX", "AZTEC", "PDF_417",
 ] as const;
 
 export const FORMAT_LABEL: Record<string, string> = {
   EAN_13: "EAN-13", EAN_8: "EAN-8", UPC_A: "UPC-A", UPC_E: "UPC-E", UPC_EAN_EXTENSION: "UPC/EAN ext.",
   CODE_128: "Code 128", CODE_93: "Code 93", CODE_39: "Code 39", CODABAR: "Codabar", ITF: "ITF",
   RSS_14: "GS1 DataBar", RSS_EXPANDED: "GS1 DataBar Exp.",
-  QR_CODE: "QR", DATA_MATRIX: "Data Matrix", AZTEC: "Aztec", PDF_417: "PDF417", MAXICODE: "MaxiCode",
+  QR_CODE: "QR", DATA_MATRIX: "Data Matrix", AZTEC: "Aztec", PDF_417: "PDF417",
 };
 
 type ScannerProps = {
-  /** active=false stops the camera */
   active: boolean;
   onScan: (code: string, format: string) => void;
   /** If true, scanner keeps running after a hit — for bulk mode */
@@ -36,13 +34,14 @@ export function ScannerPanel({ active, onScan, continuous, onCameraError }: Scan
   const [manual, setManual] = useState("");
   const [lastFormat, setLastFormat] = useState<string | null>(null);
   const [lastCode, setLastCode] = useState<string | null>(null);
-  const lastHitRef = useRef<{ code: string; t: number } | null>(null);
+  const stoppedRef = useRef(false);
+  const lastSameRef = useRef<{ code: string; t: number } | null>(null);
 
   useEffect(() => {
     if (!active) {
-      setLastFormat(null);
-      setLastCode(null);
-      lastHitRef.current = null;
+      setLastFormat(null); setLastCode(null);
+      stoppedRef.current = false;
+      lastSameRef.current = null;
       return;
     }
     let controls: { stop: () => void } | null = null;
@@ -51,8 +50,7 @@ export function ScannerPanel({ active, onScan, continuous, onCameraError }: Scan
     (async () => {
       try {
         if (!navigator.mediaDevices?.getUserMedia) {
-          toast.error("Camera not supported on this device");
-          return;
+          toast.error("Camera not supported on this device"); return;
         }
         const { BrowserMultiFormatReader } = await import("@zxing/browser");
         const { DecodeHintType, BarcodeFormat } = await import("@zxing/library");
@@ -62,45 +60,39 @@ export function ScannerPanel({ active, onScan, continuous, onCameraError }: Scan
         const hints = new Map();
         hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
         hints.set(DecodeHintType.TRY_HARDER, true);
-        const reader = new BrowserMultiFormatReader(hints);
+        const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 80 });
 
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
           stream.getTracks().forEach((t) => t.stop());
         } catch {
-          toast.error("Camera permission denied");
-          onCameraError?.();
-          return;
+          toast.error("Camera permission denied"); onCameraError?.(); return;
         }
         const cams = await BrowserMultiFormatReader.listVideoInputDevices();
         if (cancelled) return;
         setDevices(cams);
         const preferred = cams.find((c) => /back|rear|environment/i.test(c.label))?.deviceId
-          ?? deviceId
-          ?? cams[0]?.deviceId;
+          ?? deviceId ?? cams[0]?.deviceId;
         setDeviceId(preferred);
         if (!videoRef.current) return;
 
         controls = await reader.decodeFromVideoDevice(
-          preferred,
-          videoRef.current,
+          preferred, videoRef.current,
           (result, _err, ctrl) => {
-            if (!result) return;
+            if (!result || stoppedRef.current) return;
             const text = result.getText();
             const fmt = BarcodeFormat[result.getBarcodeFormat()] ?? "Unknown";
             const now = Date.now();
-            // Guard against ZXing firing the same barcode every video frame.
-            // Same code within 4s → ignore. Any code within 600ms → ignore (dedupe frame bursts).
-            const sameWindow = continuous ? 4000 : 2500;
-            if (lastHitRef.current) {
-              const dt = now - lastHitRef.current.t;
-              if (lastHitRef.current.code === text && dt < sameWindow) return;
-              if (dt < 600) return;
+            if (continuous) {
+              // In bulk mode: only ignore rapid duplicate of the SAME code within 1.5s
+              if (lastSameRef.current && lastSameRef.current.code === text && now - lastSameRef.current.t < 1500) return;
+              lastSameRef.current = { code: text, t: now };
+            } else {
+              // Single scan: stop immediately on first hit
+              stoppedRef.current = true;
+              ctrl.stop();
             }
-            lastHitRef.current = { code: text, t: now };
-            setLastFormat(fmt);
-            setLastCode(text);
-            if (!continuous) ctrl.stop();
+            setLastFormat(fmt); setLastCode(text);
             onScan(text, fmt);
           },
         );
@@ -191,4 +183,3 @@ export function CameraScanner({ open, onClose, onScan, continuous, title }: Prop
     </Dialog>
   );
 }
-

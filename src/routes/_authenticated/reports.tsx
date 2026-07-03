@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { inr } from "@/lib/format";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from "recharts";
-import { Receipt } from "lucide-react";
+import { Receipt, Download } from "lucide-react";
+import { useMyRoles, canManage } from "@/hooks/use-role";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   ssr: false,
@@ -32,9 +33,14 @@ function rangeFor(preset: Preset, from?: string, to?: string) {
 }
 
 function ReportsPage() {
+  const { data: roles, isLoading: rolesLoading } = useMyRoles();
   const [preset, setPreset] = useState<Preset>("7d");
   const [from, setFrom] = useState(""); const [to, setTo] = useState("");
   const { start, end } = rangeFor(preset, from, to);
+
+  if (!rolesLoading && !canManage(roles)) {
+    return <Navigate to="/dashboard" />;
+  }
 
   const sales = useQuery({
     queryKey: ["reports-sales", preset, from, to],
@@ -109,6 +115,9 @@ function ReportsPage() {
           <span className="text-muted-foreground">→</span>
           <Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPreset("custom"); }} className="w-40" />
         </div>
+        <Button size="sm" variant="secondary" className="ml-auto" onClick={() => exportMonthlyGSTCSV(bills, start, end)}>
+          <Download className="size-4" /> Monthly GST CSV
+        </Button>
       </Card>
 
       <Tabs defaultValue="summary">
@@ -241,4 +250,29 @@ function Kpi({ label, value }: { label: string; value: string }) {
       <div className="text-sm text-muted-foreground">{label}</div>
     </Card>
   );
+}
+
+type BillLike = { bill_no: string; created_at: string; grand_total: number | string; tax_total: number | string; line_discount: number | string; bill_discount: number | string; payment_mode: string; customer_name: string | null; customer_phone: string | null };
+function exportMonthlyGSTCSV(bills: BillLike[], start: Date, end: Date) {
+  const header = ["Bill No", "Date", "Customer", "Phone", "Payment", "Discount", "Taxable", "GST", "Total"];
+  const rows = bills.map((b) => {
+    const total = Number(b.grand_total);
+    const gst = Number(b.tax_total);
+    const disc = Number(b.line_discount) + Number(b.bill_discount);
+    const taxable = total - gst;
+    return [b.bill_no, new Date(b.created_at).toISOString().slice(0, 10), b.customer_name ?? "", b.customer_phone ?? "", b.payment_mode, disc.toFixed(2), taxable.toFixed(2), gst.toFixed(2), total.toFixed(2)];
+  });
+  const totalGst = bills.reduce((s, b) => s + Number(b.tax_total), 0);
+  const totalTaxable = bills.reduce((s, b) => s + Number(b.grand_total) - Number(b.tax_total), 0);
+  const totalGrand = bills.reduce((s, b) => s + Number(b.grand_total), 0);
+  rows.push([]);
+  rows.push(["TOTAL", "", "", "", "", "", totalTaxable.toFixed(2), totalGst.toFixed(2), totalGrand.toFixed(2)]);
+  const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `GST-${start.toISOString().slice(0, 10)}_to_${end.toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
