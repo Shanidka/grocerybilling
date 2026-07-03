@@ -115,7 +115,7 @@ function AppShell() {
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-1">
-          {nav.map((n) => {
+          {nav.filter((n) => !n.roles || n.roles.some((r) => (roles ?? []).includes(r))).map((n) => {
             const active = pathname === n.to || pathname.startsWith(n.to + "/");
             const Icon = n.icon;
             return (
