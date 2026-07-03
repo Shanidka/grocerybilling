@@ -525,7 +525,7 @@ function PaymentDialog({
         items: cart.map((l) => ({
           name: l.name + (l.sold_by === "weight" ? ` (${l.qty.toFixed(3)}kg)` : ""),
           qty: l.qty, unit_price: l.unit_price, tax_pct: l.tax_pct,
-          line_discount: l.discount, line_total: l.unit_price * l.qty - l.discount,
+          line_discount: l.discount, line_total: l.unit_price * l.qty - l.discount, mrp: l.mrp,
         })),
         subtotal: totals.subtotal, taxTotal: totals.taxTotal,
         lineDiscount: totals.lineDisc, billDisc: totals.billDisc, grand: totals.grand,
