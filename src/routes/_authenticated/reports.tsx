@@ -251,3 +251,28 @@ function Kpi({ label, value }: { label: string; value: string }) {
     </Card>
   );
 }
+
+type BillLike = { bill_no: string; created_at: string; grand_total: number | string; tax_total: number | string; line_discount: number | string; bill_discount: number | string; payment_mode: string; customer_name: string | null; customer_phone: string | null };
+function exportMonthlyGSTCSV(bills: BillLike[], start: Date, end: Date) {
+  const header = ["Bill No", "Date", "Customer", "Phone", "Payment", "Discount", "Taxable", "GST", "Total"];
+  const rows = bills.map((b) => {
+    const total = Number(b.grand_total);
+    const gst = Number(b.tax_total);
+    const disc = Number(b.line_discount) + Number(b.bill_discount);
+    const taxable = total - gst;
+    return [b.bill_no, new Date(b.created_at).toISOString().slice(0, 10), b.customer_name ?? "", b.customer_phone ?? "", b.payment_mode, disc.toFixed(2), taxable.toFixed(2), gst.toFixed(2), total.toFixed(2)];
+  });
+  const totalGst = bills.reduce((s, b) => s + Number(b.tax_total), 0);
+  const totalTaxable = bills.reduce((s, b) => s + Number(b.grand_total) - Number(b.tax_total), 0);
+  const totalGrand = bills.reduce((s, b) => s + Number(b.grand_total), 0);
+  rows.push([]);
+  rows.push(["TOTAL", "", "", "", "", "", totalTaxable.toFixed(2), totalGst.toFixed(2), totalGrand.toFixed(2)]);
+  const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `GST-${start.toISOString().slice(0, 10)}_to_${end.toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
