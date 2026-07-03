@@ -30,16 +30,20 @@ function InventoryPage() {
       </div>
 
       <Tabs defaultValue="purchases">
-        <TabsList>
+        <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="purchases">Purchases</TabsTrigger>
           <TabsTrigger value="adjustments">Adjustments</TabsTrigger>
           <TabsTrigger value="damaged">Damaged</TabsTrigger>
           <TabsTrigger value="returns">Returns</TabsTrigger>
+          <TabsTrigger value="belowmin">Below minimum</TabsTrigger>
+          <TabsTrigger value="expiring">About to expire</TabsTrigger>
         </TabsList>
         <TabsContent value="purchases"><PurchasesTab /></TabsContent>
         <TabsContent value="adjustments"><AdjustmentsTab /></TabsContent>
         <TabsContent value="damaged"><DamagedTab /></TabsContent>
         <TabsContent value="returns"><ReturnsTab /></TabsContent>
+        <TabsContent value="belowmin"><BelowMinTab /></TabsContent>
+        <TabsContent value="expiring"><ExpiringTab /></TabsContent>
       </Tabs>
     </div>
   );
