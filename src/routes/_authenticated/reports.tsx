@@ -33,9 +33,14 @@ function rangeFor(preset: Preset, from?: string, to?: string) {
 }
 
 function ReportsPage() {
+  const { data: roles, isLoading: rolesLoading } = useMyRoles();
   const [preset, setPreset] = useState<Preset>("7d");
   const [from, setFrom] = useState(""); const [to, setTo] = useState("");
   const { start, end } = rangeFor(preset, from, to);
+
+  if (!rolesLoading && !canManage(roles)) {
+    return <Navigate to="/dashboard" />;
+  }
 
   const sales = useQuery({
     queryKey: ["reports-sales", preset, from, to],
