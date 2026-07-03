@@ -19,6 +19,7 @@ import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedProductsRouteImport } from './routes/_authenticated/products'
 import { Route as AuthenticatedInventoryRouteImport } from './routes/_authenticated/inventory'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedCustomersRouteImport } from './routes/_authenticated/customers'
 import { Route as AuthenticatedBillingRouteImport } from './routes/_authenticated/billing'
 import { Route as AuthenticatedAlertsRouteImport } from './routes/_authenticated/alerts'
 
@@ -71,6 +72,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCustomersRoute = AuthenticatedCustomersRouteImport.update({
+  id: '/customers',
+  path: '/customers',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedBillingRoute = AuthenticatedBillingRouteImport.update({
   id: '/billing',
   path: '/billing',
@@ -87,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/alerts': typeof AuthenticatedAlertsRoute
   '/billing': typeof AuthenticatedBillingRoute
+  '/customers': typeof AuthenticatedCustomersRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/inventory': typeof AuthenticatedInventoryRoute
   '/products': typeof AuthenticatedProductsRoute
@@ -100,6 +107,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/alerts': typeof AuthenticatedAlertsRoute
   '/billing': typeof AuthenticatedBillingRoute
+  '/customers': typeof AuthenticatedCustomersRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/inventory': typeof AuthenticatedInventoryRoute
   '/products': typeof AuthenticatedProductsRoute
@@ -115,6 +123,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/alerts': typeof AuthenticatedAlertsRoute
   '/_authenticated/billing': typeof AuthenticatedBillingRoute
+  '/_authenticated/customers': typeof AuthenticatedCustomersRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/inventory': typeof AuthenticatedInventoryRoute
   '/_authenticated/products': typeof AuthenticatedProductsRoute
@@ -130,6 +139,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/alerts'
     | '/billing'
+    | '/customers'
     | '/dashboard'
     | '/inventory'
     | '/products'
@@ -143,6 +153,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/alerts'
     | '/billing'
+    | '/customers'
     | '/dashboard'
     | '/inventory'
     | '/products'
@@ -157,6 +168,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/alerts'
     | '/_authenticated/billing'
+    | '/_authenticated/customers'
     | '/_authenticated/dashboard'
     | '/_authenticated/inventory'
     | '/_authenticated/products'
@@ -245,6 +257,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/customers': {
+      id: '/_authenticated/customers'
+      path: '/customers'
+      fullPath: '/customers'
+      preLoaderRoute: typeof AuthenticatedCustomersRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/billing': {
       id: '/_authenticated/billing'
       path: '/billing'
@@ -265,6 +284,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAlertsRoute: typeof AuthenticatedAlertsRoute
   AuthenticatedBillingRoute: typeof AuthenticatedBillingRoute
+  AuthenticatedCustomersRoute: typeof AuthenticatedCustomersRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedInventoryRoute: typeof AuthenticatedInventoryRoute
   AuthenticatedProductsRoute: typeof AuthenticatedProductsRoute
@@ -276,6 +296,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAlertsRoute: AuthenticatedAlertsRoute,
   AuthenticatedBillingRoute: AuthenticatedBillingRoute,
+  AuthenticatedCustomersRoute: AuthenticatedCustomersRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedInventoryRoute: AuthenticatedInventoryRoute,
   AuthenticatedProductsRoute: AuthenticatedProductsRoute,
