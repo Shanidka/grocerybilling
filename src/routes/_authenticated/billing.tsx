@@ -133,7 +133,7 @@ function Billing() {
         {
           product_id: p.id, name: p.name, unit_price,
           qty, tax_pct: Number(p.tax_pct), discount: 0, stock_qty: Number(p.stock_qty),
-          sold_by: p.sold_by, unit: isWeight ? "kg" : p.unit,
+          sold_by: p.sold_by, unit: isWeight ? "kg" : p.unit, mrp: Number(p.mrp || 0),
         },
       ];
     });
