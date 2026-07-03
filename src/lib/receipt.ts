@@ -112,12 +112,23 @@ export async function generateReceipt(r: ReceiptInput) {
     doc.text(val, W - 4, y, { align: "right" });
     y += bold ? 6 : 4;
   };
+  // Total MRP & savings
+  const mrpTotal = r.items.reduce((s, it) => s + (it.mrp && it.mrp > 0 ? it.mrp * it.qty : it.unit_price * it.qty), 0);
+  const savings = Math.max(0, mrpTotal - r.grand);
+  right("MRP total", `₹${mrpTotal.toFixed(2)}`);
   right("Subtotal", `₹${r.subtotal.toFixed(2)}`);
-  right("GST", `₹${r.taxTotal.toFixed(2)}`);
+  if (r.taxTotal > 0) right("Tax", `₹${r.taxTotal.toFixed(2)}`);
   if (r.lineDiscount > 0) right("Item discount", `- ₹${r.lineDiscount.toFixed(2)}`);
   if (r.billDisc > 0) right("Bill discount", `- ₹${r.billDisc.toFixed(2)}`);
   doc.line(4, y, W - 4, y); y += 4;
   right("TOTAL", `₹${r.grand.toFixed(2)}`, true);
+  if (savings > 0) {
+    doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(0, 128, 0);
+    doc.text("YOU SAVED", 4, y);
+    doc.text(`₹${savings.toFixed(2)}`, W - 4, y, { align: "right" });
+    doc.setTextColor(0);
+    y += 5;
+  }
   right("Paid", `₹${r.paid_amount.toFixed(2)}`);
   if (r.change_amount > 0) right("Change", `₹${r.change_amount.toFixed(2)}`);
 
