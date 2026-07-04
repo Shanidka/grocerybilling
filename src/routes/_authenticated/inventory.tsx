@@ -455,6 +455,8 @@ function ReturnsTab() {
 
 /* Below minimum stock */
 function BelowMinTab() {
+  const [brand, setBrand] = useState("__all");
+  const [search, setSearch] = useState("");
   const q = useQuery({
     queryKey: ["inv-belowmin"],
     queryFn: async () => {
@@ -465,17 +467,42 @@ function BelowMinTab() {
     },
     refetchInterval: 2 * 60 * 60 * 1000,
   });
+  const brands = useMemo(() => {
+    const s = new Set<string>();
+    (q.data ?? []).forEach((p) => { if (p.brand) s.add(p.brand); });
+    return Array.from(s).sort();
+  }, [q.data]);
+  const rows = useMemo(() => {
+    return (q.data ?? []).filter((p) => {
+      if (brand !== "__all" && (p.brand ?? "") !== brand) return false;
+      if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
+      return true;
+    });
+  }, [q.data, brand, search]);
   return (
-    <Card className="p-0 overflow-hidden">
-      {!q.data?.length ? <div className="p-8 text-center text-sm text-muted-foreground">All items above minimum. 🎉</div> : (
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 text-left"><tr><th className="px-4 py-2.5">Product</th><th className="px-4 py-2.5">Brand</th><th className="px-4 py-2.5">Stock</th><th className="px-4 py-2.5">Min</th><th className="px-4 py-2.5">Need to reach max</th></tr></thead>
-          <tbody className="divide-y">{q.data.map((p) => (
-            <tr key={p.id}><td className="px-4 py-3">{p.name}</td><td className="px-4 py-3 text-muted-foreground">{p.brand ?? "—"}</td><td className="px-4 py-3 text-destructive font-medium">{Number(p.stock_qty)} {p.unit}</td><td className="px-4 py-3">{Number(p.min_qty)} {p.unit}</td><td className="px-4 py-3 text-warning font-medium">{Math.max(0, Number(p.max_qty) - Number(p.stock_qty))} {p.unit}</td></tr>
-          ))}</tbody>
-        </table>
-      )}
-    </Card>
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Input className="max-w-xs" placeholder="Search product…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Select value={brand} onValueChange={setBrand}>
+          <SelectTrigger className="w-48"><SelectValue placeholder="All brands" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all">All brands</SelectItem>
+            {brands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <div className="text-xs text-muted-foreground ml-auto">{rows.length} item(s)</div>
+      </div>
+      <Card className="p-0 overflow-hidden">
+        {!rows.length ? <div className="p-8 text-center text-sm text-muted-foreground">Nothing matches. 🎉</div> : (
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-left"><tr><th className="px-4 py-2.5">Product</th><th className="px-4 py-2.5">Brand</th><th className="px-4 py-2.5">Stock</th><th className="px-4 py-2.5">Min</th><th className="px-4 py-2.5">Required</th></tr></thead>
+            <tbody className="divide-y">{rows.map((p) => (
+              <tr key={p.id}><td className="px-4 py-3">{p.name}</td><td className="px-4 py-3 text-muted-foreground">{p.brand ?? "—"}</td><td className="px-4 py-3 text-destructive font-medium">{Number(p.stock_qty)} {p.unit}</td><td className="px-4 py-3">{Number(p.min_qty)} {p.unit}</td><td className="px-4 py-3 text-warning font-medium">{Math.max(0, Number(p.max_qty) - Number(p.stock_qty))} {p.unit}</td></tr>
+            ))}</tbody>
+          </table>
+        )}
+      </Card>
+    </div>
   );
 }
 
