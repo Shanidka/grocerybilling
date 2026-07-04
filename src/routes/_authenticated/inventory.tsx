@@ -170,16 +170,21 @@ function PurchasesTab() {
                 <Button size="sm" variant="outline" onClick={addRow}>+ Add row</Button>
               </div>
               {items.map((it, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2">
-                  <Select value={it.product_id} onValueChange={(v) => {
-                    const p = products?.find((x) => x.id === v);
-                    setItems((arr) => arr.map((r, i) => i === idx ? { ...r, product_id: v, name: p?.name ?? "", cost: String(p?.purchase_price ?? r.cost) } : r));
-                  }}>
-                    <SelectTrigger className="col-span-6"><SelectValue placeholder="Product" /></SelectTrigger>
-                    <SelectContent>{products?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <Input className="col-span-3" type="number" step="0.001" placeholder="Qty" value={it.qty} onChange={(e) => setItems((arr) => arr.map((r, i) => i === idx ? { ...r, qty: e.target.value } : r))} />
-                  <Input className="col-span-3" type="number" step="0.01" placeholder="Cost" value={it.cost} onChange={(e) => setItems((arr) => arr.map((r, i) => i === idx ? { ...r, cost: e.target.value } : r))} />
+                <div key={idx} className="space-y-1">
+                  <div className="grid grid-cols-12 gap-2">
+                    <Select value={it.product_id} onValueChange={(v) => {
+                      const p = products?.find((x) => x.id === v);
+                      setItems((arr) => arr.map((r, i) => i === idx ? { ...r, product_id: v, name: p?.name ?? "", cost: String(p?.purchase_price ?? r.cost) } : r));
+                    }}>
+                      <SelectTrigger className="col-span-6"><SelectValue placeholder={it.name || "Product"} /></SelectTrigger>
+                      <SelectContent>{products?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Input className="col-span-3" type="number" step="0.001" placeholder="Qty" value={it.qty} onChange={(e) => setItems((arr) => arr.map((r, i) => i === idx ? { ...r, qty: e.target.value } : r))} />
+                    <Input className="col-span-3" type="number" step="0.01" placeholder="Cost" value={it.cost} onChange={(e) => setItems((arr) => arr.map((r, i) => i === idx ? { ...r, cost: e.target.value } : r))} />
+                  </div>
+                  {!it.product_id && it.name && (
+                    <div className="text-xs text-warning pl-1">From invoice: “{it.name}” — pick a matching product</div>
+                  )}
                 </div>
               ))}
               {items.length === 0 && <div className="text-sm text-muted-foreground">No rows — add items to the purchase.</div>}
