@@ -146,6 +146,24 @@ function PurchasesTab() {
               <div><Label>Supplier</Label><Input value={supplier} onChange={(e) => setSupplier(e.target.value)} /></div>
               <div><Label>Invoice No.</Label><Input value={invoice} onChange={(e) => setInvoice(e.target.value)} /></div>
             </div>
+            <div className="rounded-md border border-dashed p-3 flex items-center justify-between gap-3 bg-muted/30">
+              <div className="text-xs text-muted-foreground">
+                Auto-fill from invoice (photo, scan or PDF). Supports Indian invoices in any format.
+              </div>
+              <div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleOcr(f); }}
+                />
+                <Button size="sm" variant="secondary" disabled={ocrBusy} onClick={() => fileRef.current?.click()}>
+                  {ocrBusy ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                  {ocrBusy ? "Reading…" : "Upload invoice"}
+                </Button>
+              </div>
+            </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Items</Label>
