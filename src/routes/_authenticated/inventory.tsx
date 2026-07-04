@@ -79,6 +79,42 @@ function PurchasesTab() {
   const [open, setOpen] = useState(false);
   const [supplier, setSupplier] = useState(""); const [invoice, setInvoice] = useState("");
   const [items, setItems] = useState<Array<{ product_id: string; name: string; qty: string; cost: string }>>([]);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const ocrFn = useServerFn(extractInvoice);
+
+  const handleOcr = async (file: File) => {
+    if (file.size > 8 * 1024 * 1024) return toast.error("File too large (max 8 MB)");
+    setOcrBusy(true);
+    try {
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result));
+        fr.onerror = () => reject(fr.error);
+        fr.readAsDataURL(file);
+      });
+      const res = await ocrFn({ data: { file_data_url: dataUrl, mime: file.type || "image/jpeg" } });
+      if (res.supplier && !supplier) setSupplier(res.supplier);
+      if (res.invoice_no && !invoice) setInvoice(res.invoice_no);
+      const matched = res.items.map((it) => {
+        const byBarcode = it.barcode ? products?.find((p) => p.barcode === it.barcode) : undefined;
+        const byName = !byBarcode
+          ? products?.find((p) => p.name.toLowerCase() === it.name.toLowerCase())
+            ?? products?.find((p) => p.name.toLowerCase().includes(it.name.toLowerCase().slice(0, 12)))
+          : undefined;
+        const p = byBarcode ?? byName;
+        return { product_id: p?.id ?? "", name: p?.name ?? it.name, qty: String(it.qty), cost: String(it.cost || p?.purchase_price || 0) };
+      });
+      setItems((prev) => [...prev, ...matched]);
+      const unmatched = matched.filter((m) => !m.product_id).length;
+      toast.success(`Imported ${matched.length} line(s)${unmatched ? ` — ${unmatched} need a product match` : ""}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "OCR failed");
+    } finally {
+      setOcrBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
 
   const addRow = () => setItems((i) => [...i, { product_id: "", name: "", qty: "1", cost: "0" }]);
   const total = items.reduce((s, i) => s + Number(i.qty || 0) * Number(i.cost || 0), 0);
