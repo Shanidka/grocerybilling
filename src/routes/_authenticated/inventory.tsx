@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { inr } from "@/lib/format";
-import { Plus, Camera } from "lucide-react";
+import { Plus, Camera, Upload, Loader2 } from "lucide-react";
 import { CameraScanner } from "@/components/camera-scanner";
+import { extractInvoice } from "@/lib/invoice-ocr.functions";
 
 export const Route = createFileRoute("/_authenticated/inventory")({
   ssr: false,
