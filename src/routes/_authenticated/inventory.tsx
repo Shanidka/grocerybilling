@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { inr } from "@/lib/format";
-import { Plus, Camera } from "lucide-react";
+import { Plus, Camera, Upload, Loader2 } from "lucide-react";
 import { CameraScanner } from "@/components/camera-scanner";
+import { extractInvoice } from "@/lib/invoice-ocr.functions";
 
 export const Route = createFileRoute("/_authenticated/inventory")({
   ssr: false,
@@ -77,6 +79,42 @@ function PurchasesTab() {
   const [open, setOpen] = useState(false);
   const [supplier, setSupplier] = useState(""); const [invoice, setInvoice] = useState("");
   const [items, setItems] = useState<Array<{ product_id: string; name: string; qty: string; cost: string }>>([]);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const ocrFn = useServerFn(extractInvoice);
+
+  const handleOcr = async (file: File) => {
+    if (file.size > 8 * 1024 * 1024) return toast.error("File too large (max 8 MB)");
+    setOcrBusy(true);
+    try {
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result));
+        fr.onerror = () => reject(fr.error);
+        fr.readAsDataURL(file);
+      });
+      const res = await ocrFn({ data: { file_data_url: dataUrl, mime: file.type || "image/jpeg" } });
+      if (res.supplier && !supplier) setSupplier(res.supplier);
+      if (res.invoice_no && !invoice) setInvoice(res.invoice_no);
+      const matched = res.items.map((it) => {
+        const byBarcode = it.barcode ? products?.find((p) => p.barcode === it.barcode) : undefined;
+        const byName = !byBarcode
+          ? products?.find((p) => p.name.toLowerCase() === it.name.toLowerCase())
+            ?? products?.find((p) => p.name.toLowerCase().includes(it.name.toLowerCase().slice(0, 12)))
+          : undefined;
+        const p = byBarcode ?? byName;
+        return { product_id: p?.id ?? "", name: p?.name ?? it.name, qty: String(it.qty), cost: String(it.cost || p?.purchase_price || 0) };
+      });
+      setItems((prev) => [...prev, ...matched]);
+      const unmatched = matched.filter((m) => !m.product_id).length;
+      toast.success(`Imported ${matched.length} line(s)${unmatched ? ` — ${unmatched} need a product match` : ""}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "OCR failed");
+    } finally {
+      setOcrBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
 
   const addRow = () => setItems((i) => [...i, { product_id: "", name: "", qty: "1", cost: "0" }]);
   const total = items.reduce((s, i) => s + Number(i.qty || 0) * Number(i.cost || 0), 0);
@@ -108,22 +146,45 @@ function PurchasesTab() {
               <div><Label>Supplier</Label><Input value={supplier} onChange={(e) => setSupplier(e.target.value)} /></div>
               <div><Label>Invoice No.</Label><Input value={invoice} onChange={(e) => setInvoice(e.target.value)} /></div>
             </div>
+            <div className="rounded-md border border-dashed p-3 flex items-center justify-between gap-3 bg-muted/30">
+              <div className="text-xs text-muted-foreground">
+                Auto-fill from invoice (photo, scan or PDF). Supports Indian invoices in any format.
+              </div>
+              <div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleOcr(f); }}
+                />
+                <Button size="sm" variant="secondary" disabled={ocrBusy} onClick={() => fileRef.current?.click()}>
+                  {ocrBusy ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                  {ocrBusy ? "Reading…" : "Upload invoice"}
+                </Button>
+              </div>
+            </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Items</Label>
                 <Button size="sm" variant="outline" onClick={addRow}>+ Add row</Button>
               </div>
               {items.map((it, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2">
-                  <Select value={it.product_id} onValueChange={(v) => {
-                    const p = products?.find((x) => x.id === v);
-                    setItems((arr) => arr.map((r, i) => i === idx ? { ...r, product_id: v, name: p?.name ?? "", cost: String(p?.purchase_price ?? r.cost) } : r));
-                  }}>
-                    <SelectTrigger className="col-span-6"><SelectValue placeholder="Product" /></SelectTrigger>
-                    <SelectContent>{products?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <Input className="col-span-3" type="number" step="0.001" placeholder="Qty" value={it.qty} onChange={(e) => setItems((arr) => arr.map((r, i) => i === idx ? { ...r, qty: e.target.value } : r))} />
-                  <Input className="col-span-3" type="number" step="0.01" placeholder="Cost" value={it.cost} onChange={(e) => setItems((arr) => arr.map((r, i) => i === idx ? { ...r, cost: e.target.value } : r))} />
+                <div key={idx} className="space-y-1">
+                  <div className="grid grid-cols-12 gap-2">
+                    <Select value={it.product_id} onValueChange={(v) => {
+                      const p = products?.find((x) => x.id === v);
+                      setItems((arr) => arr.map((r, i) => i === idx ? { ...r, product_id: v, name: p?.name ?? "", cost: String(p?.purchase_price ?? r.cost) } : r));
+                    }}>
+                      <SelectTrigger className="col-span-6"><SelectValue placeholder={it.name || "Product"} /></SelectTrigger>
+                      <SelectContent>{products?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Input className="col-span-3" type="number" step="0.001" placeholder="Qty" value={it.qty} onChange={(e) => setItems((arr) => arr.map((r, i) => i === idx ? { ...r, qty: e.target.value } : r))} />
+                    <Input className="col-span-3" type="number" step="0.01" placeholder="Cost" value={it.cost} onChange={(e) => setItems((arr) => arr.map((r, i) => i === idx ? { ...r, cost: e.target.value } : r))} />
+                  </div>
+                  {!it.product_id && it.name && (
+                    <div className="text-xs text-warning pl-1">From invoice: “{it.name}” — pick a matching product</div>
+                  )}
                 </div>
               ))}
               {items.length === 0 && <div className="text-sm text-muted-foreground">No rows — add items to the purchase.</div>}
@@ -394,6 +455,8 @@ function ReturnsTab() {
 
 /* Below minimum stock */
 function BelowMinTab() {
+  const [brand, setBrand] = useState("__all");
+  const [search, setSearch] = useState("");
   const q = useQuery({
     queryKey: ["inv-belowmin"],
     queryFn: async () => {
@@ -404,17 +467,42 @@ function BelowMinTab() {
     },
     refetchInterval: 2 * 60 * 60 * 1000,
   });
+  const brands = useMemo(() => {
+    const s = new Set<string>();
+    (q.data ?? []).forEach((p) => { if (p.brand) s.add(p.brand); });
+    return Array.from(s).sort();
+  }, [q.data]);
+  const rows = useMemo(() => {
+    return (q.data ?? []).filter((p) => {
+      if (brand !== "__all" && (p.brand ?? "") !== brand) return false;
+      if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
+      return true;
+    });
+  }, [q.data, brand, search]);
   return (
-    <Card className="p-0 overflow-hidden">
-      {!q.data?.length ? <div className="p-8 text-center text-sm text-muted-foreground">All items above minimum. 🎉</div> : (
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 text-left"><tr><th className="px-4 py-2.5">Product</th><th className="px-4 py-2.5">Brand</th><th className="px-4 py-2.5">Stock</th><th className="px-4 py-2.5">Min</th><th className="px-4 py-2.5">Need to reach max</th></tr></thead>
-          <tbody className="divide-y">{q.data.map((p) => (
-            <tr key={p.id}><td className="px-4 py-3">{p.name}</td><td className="px-4 py-3 text-muted-foreground">{p.brand ?? "—"}</td><td className="px-4 py-3 text-destructive font-medium">{Number(p.stock_qty)} {p.unit}</td><td className="px-4 py-3">{Number(p.min_qty)} {p.unit}</td><td className="px-4 py-3 text-warning font-medium">{Math.max(0, Number(p.max_qty) - Number(p.stock_qty))} {p.unit}</td></tr>
-          ))}</tbody>
-        </table>
-      )}
-    </Card>
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Input className="max-w-xs" placeholder="Search product…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Select value={brand} onValueChange={setBrand}>
+          <SelectTrigger className="w-48"><SelectValue placeholder="All brands" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all">All brands</SelectItem>
+            {brands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <div className="text-xs text-muted-foreground ml-auto">{rows.length} item(s)</div>
+      </div>
+      <Card className="p-0 overflow-hidden">
+        {!rows.length ? <div className="p-8 text-center text-sm text-muted-foreground">Nothing matches. 🎉</div> : (
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-left"><tr><th className="px-4 py-2.5">Product</th><th className="px-4 py-2.5">Brand</th><th className="px-4 py-2.5">Stock</th><th className="px-4 py-2.5">Min</th><th className="px-4 py-2.5">Required</th></tr></thead>
+            <tbody className="divide-y">{rows.map((p) => (
+              <tr key={p.id}><td className="px-4 py-3">{p.name}</td><td className="px-4 py-3 text-muted-foreground">{p.brand ?? "—"}</td><td className="px-4 py-3 text-destructive font-medium">{Number(p.stock_qty)} {p.unit}</td><td className="px-4 py-3">{Number(p.min_qty)} {p.unit}</td><td className="px-4 py-3 text-warning font-medium">{Math.max(0, Number(p.max_qty) - Number(p.stock_qty))} {p.unit}</td></tr>
+            ))}</tbody>
+          </table>
+        )}
+      </Card>
+    </div>
   );
 }
 
