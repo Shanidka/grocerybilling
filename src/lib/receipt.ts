@@ -93,13 +93,20 @@ export async function generateReceipt(r: ReceiptInput) {
     doc.text(it.unit_price.toFixed(2), 58, y, { align: "right" });
     doc.text(it.line_total.toFixed(2), W - 4, y, { align: "right" });
     y += 4;
-    if (it.line_discount > 0 || it.tax_pct > 0) {
+    const hasMrp = it.mrp && it.mrp > it.unit_price;
+    const metaParts = [
+      hasMrp ? `MRP ₹${it.mrp!.toFixed(2)}` : null,
+      it.line_discount > 0 ? `disc ₹${it.line_discount.toFixed(2)}` : null,
+      it.tax_pct > 0 ? `GST ${it.tax_pct}%` : null,
+    ].filter(Boolean).join(" · ");
+    if (metaParts) {
       doc.setFontSize(7).setTextColor(120);
-      const meta = [
-        it.line_discount > 0 ? `disc ₹${it.line_discount.toFixed(2)}` : null,
-        it.tax_pct > 0 ? `GST ${it.tax_pct}%` : null,
-      ].filter(Boolean).join(" · ");
-      doc.text(meta, 4, y);
+      doc.text(metaParts, 4, y);
+      if (hasMrp) {
+        const save = (it.mrp! - it.unit_price) * it.qty;
+        doc.setTextColor(0, 128, 0);
+        doc.text(`save ₹${save.toFixed(2)}`, W - 4, y, { align: "right" });
+      }
       y += 3;
       doc.setFontSize(8).setTextColor(0);
     }
