@@ -158,6 +158,9 @@ function ProductsPage() {
     qc.invalidateQueries({ queryKey: ["all-products"] });
     qc.invalidateQueries({ queryKey: ["billing-products"] });
     qc.invalidateQueries({ queryKey: ["inv-products"] });
+    qc.invalidateQueries({ queryKey: ["inv-belowmin"] });
+    qc.invalidateQueries({ queryKey: ["inv-expiring"] });
+    qc.invalidateQueries({ queryKey: ["inv-stock"] });
   };
 
   const remove = async (p: ProductRow) => {
