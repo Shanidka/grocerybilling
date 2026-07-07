@@ -1,7 +1,7 @@
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff, Package, Settings as SettingsIcon, AlertTriangle, BarChart3, Boxes, Users, Truck, UserCog } from "lucide-react";
+import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff, Package, Settings as SettingsIcon, AlertTriangle, BarChart3, Boxes, Users, Truck, UserCog, ClipboardList, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useMyRoles } from "@/hooks/use-role";
@@ -38,9 +38,11 @@ const nav: Array<{ to: string; label: string; icon: typeof LayoutDashboard; role
   { to: "/billing", label: "Billing", icon: ScanBarcode },
   { to: "/products", label: "Products", icon: Package },
   { to: "/inventory", label: "Inventory", icon: Boxes },
+  { to: "/purchase-orders", label: "Purchase Orders", icon: ClipboardList, roles: ["admin", "manager"] },
   { to: "/alerts", label: "Alerts", icon: AlertTriangle },
   { to: "/customers", label: "Customers", icon: Users },
   { to: "/suppliers", label: "Suppliers", icon: Truck, roles: ["admin", "manager"] },
+  { to: "/expenses", label: "Expenses", icon: Wallet, roles: ["admin", "manager"] },
   { to: "/reports", label: "Reports", icon: BarChart3, roles: ["admin", "manager"] },
   { to: "/staff", label: "Staff", icon: UserCog, roles: ["admin"] },
   { to: "/settings", label: "Settings", icon: SettingsIcon, roles: ["admin", "manager"] },
