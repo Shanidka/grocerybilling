@@ -138,6 +138,7 @@ function StockTab() {
           </SelectContent>
         </Select>
         <div className="text-xs text-muted-foreground ml-auto">{rows.length} product(s)</div>
+        <a href="/purchase-orders" className="text-xs underline text-primary">Create purchase order →</a>
       </div>
       <Card className="p-0 overflow-hidden">
         {!rows.length ? <div className="p-8 text-center text-sm text-muted-foreground">No products yet. Add products from the Products page.</div> : (
@@ -173,6 +174,7 @@ function StockTab() {
 function PurchasesTab() {
   const qc = useQueryClient();
   const { data: products } = useProductsList();
+  const { data: suppliersList } = useSuppliersList();
   const q = useQuery({
     queryKey: ["inv-purchases"],
     queryFn: async () => {
@@ -250,7 +252,13 @@ function PurchasesTab() {
           <DialogContent className="max-w-2xl">
             <DialogHeader><DialogTitle>Record purchase</DialogTitle></DialogHeader>
             <div className="grid sm:grid-cols-2 gap-3">
-              <div><Label>Supplier</Label><Input value={supplier} onChange={(e) => setSupplier(e.target.value)} /></div>
+              <div>
+                <Label>Supplier</Label>
+                <Input value={supplier} onChange={(e) => setSupplier(e.target.value)} list="supplier-datalist" />
+                <datalist id="supplier-datalist">
+                  {suppliersList?.map((s) => <option key={s.id} value={s.name} />)}
+                </datalist>
+              </div>
               <div><Label>Invoice No.</Label><Input value={invoice} onChange={(e) => setInvoice(e.target.value)} /></div>
             </div>
             <div className="rounded-md border border-dashed p-3 flex items-center justify-between gap-3 bg-muted/30">
