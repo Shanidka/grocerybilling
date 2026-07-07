@@ -100,6 +100,45 @@ export type Database = {
           },
         ]
       }
+      expenses: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          payee: string | null
+          payment_mode: string
+          spent_on: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          category: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          payee?: string | null
+          payment_mode?: string
+          spent_on?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          payee?: string | null
+          payment_mode?: string
+          spent_on?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       held_bills: {
         Row: {
           bill_discount: number
@@ -332,28 +371,40 @@ export type Database = {
           cost: number
           created_at: string
           entry_id: string
+          hsn: string | null
           id: string
+          line_total: number
+          mrp: number | null
           name: string
           product_id: string | null
           qty: number
+          tax_pct: number
         }
         Insert: {
           cost?: number
           created_at?: string
           entry_id: string
+          hsn?: string | null
           id?: string
+          line_total?: number
+          mrp?: number | null
           name: string
           product_id?: string | null
           qty: number
+          tax_pct?: number
         }
         Update: {
           cost?: number
           created_at?: string
           entry_id?: string
+          hsn?: string | null
           id?: string
+          line_total?: number
+          mrp?: number | null
           name?: string
           product_id?: string | null
           qty?: number
+          tax_pct?: number
         }
         Relationships: [
           {
@@ -376,29 +427,41 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          mrp: number
+          notes: string | null
           po_id: string
           product_id: string | null
           product_name: string
           qty: number
           unit: string | null
+          unit_cost: number
+          weight_g: number | null
         }
         Insert: {
           created_at?: string
           id?: string
+          mrp?: number
+          notes?: string | null
           po_id: string
           product_id?: string | null
           product_name: string
           qty?: number
           unit?: string | null
+          unit_cost?: number
+          weight_g?: number | null
         }
         Update: {
           created_at?: string
           id?: string
+          mrp?: number
+          notes?: string | null
           po_id?: string
           product_id?: string | null
           product_name?: string
           qty?: number
           unit?: string | null
+          unit_cost?: number
+          weight_g?: number | null
         }
         Relationships: [
           {
@@ -421,9 +484,12 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          destination: string | null
+          expected_at: string | null
           id: string
           notes: string | null
           order_no: string | null
+          printed_at: string | null
           status: string
           supplier_id: string | null
           supplier_name: string | null
@@ -432,9 +498,12 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          destination?: string | null
+          expected_at?: string | null
           id?: string
           notes?: string | null
           order_no?: string | null
+          printed_at?: string | null
           status?: string
           supplier_id?: string | null
           supplier_name?: string | null
@@ -443,9 +512,12 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          destination?: string | null
+          expected_at?: string | null
           id?: string
           notes?: string | null
           order_no?: string | null
+          printed_at?: string | null
           status?: string
           supplier_id?: string | null
           supplier_name?: string | null
@@ -463,6 +535,7 @@ export type Database = {
       }
       sale_items: {
         Row: {
+          cost_at_sale: number
           created_at: string
           id: string
           line_discount: number
@@ -475,6 +548,7 @@ export type Database = {
           unit_price: number
         }
         Insert: {
+          cost_at_sale?: number
           created_at?: string
           id?: string
           line_discount?: number
@@ -487,6 +561,7 @@ export type Database = {
           unit_price: number
         }
         Update: {
+          cost_at_sale?: number
           created_at?: string
           id?: string
           line_discount?: number
@@ -718,6 +793,7 @@ export type Database = {
       }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
       next_bill_no: { Args: never; Returns: string }
+      next_po_no: { Args: never; Returns: string }
     }
     Enums: {
       app_role: "admin" | "manager" | "cashier"
