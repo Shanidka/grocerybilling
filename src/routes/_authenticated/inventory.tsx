@@ -87,8 +87,19 @@ function useProductsList() {
     queryKey: ["inv-products"],
     queryFn: async () => {
       const { data, error } = await supabase.from("products")
-        .select("id,name,unit,barcode,purchase_price,selling_price,stock_qty")
+        .select("id,name,unit,barcode,brand,purchase_price,selling_price,mrp,stock_qty")
         .eq("is_active", true).order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+function useSuppliersList() {
+  return useQuery({
+    queryKey: ["inv-suppliers"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("suppliers").select("id,name").order("name");
       if (error) throw error;
       return data ?? [];
     },
