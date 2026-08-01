@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { useMyRoles } from "@/hooks/use-role";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useShopSettings } from "@/lib/shop-settings";
+
 
 const INACTIVITY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -33,25 +35,43 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 type Role = "admin" | "manager" | "cashier";
-const nav: Array<{ to: string; label: string; icon: typeof LayoutDashboard; roles?: Role[] }> = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/billing", label: "Billing", icon: ScanBarcode },
-  { to: "/products", label: "Products", icon: Package },
-  { to: "/inventory", label: "Inventory", icon: Boxes },
-  { to: "/purchase-orders", label: "Purchase Orders", icon: ClipboardList, roles: ["admin", "manager"] },
-  { to: "/alerts", label: "Alerts", icon: AlertTriangle },
-  { to: "/customers", label: "Customers", icon: Users },
-  { to: "/suppliers", label: "Suppliers", icon: Truck, roles: ["admin", "manager"] },
-  { to: "/expenses", label: "Expenses", icon: Wallet, roles: ["admin", "manager"] },
-  { to: "/reports", label: "Reports", icon: BarChart3, roles: ["admin", "manager"] },
-  { to: "/staff", label: "Staff", icon: UserCog, roles: ["admin"] },
-  { to: "/settings", label: "Settings", icon: SettingsIcon, roles: ["admin", "manager"] },
+type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; roles?: Role[] };
+type NavGroup = { group: string; items: NavItem[] };
+
+const NAV: NavGroup[] = [
+  { group: "Overview", items: [
+    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/alerts", label: "Alerts", icon: AlertTriangle },
+  ] },
+  { group: "Sales", items: [
+    { to: "/billing", label: "Billing", icon: ScanBarcode },
+    { to: "/customers", label: "Customers", icon: Users },
+    { to: "/reports", label: "Reports", icon: BarChart3, roles: ["admin", "manager"] },
+  ] },
+  { group: "Products", items: [
+    { to: "/products", label: "Products", icon: Package },
+    { to: "/inventory", label: "Inventory", icon: Boxes },
+  ] },
+  { group: "Purchases", items: [
+    { to: "/purchase-orders", label: "Purchase Orders", icon: ClipboardList, roles: ["admin", "manager"] },
+    { to: "/suppliers", label: "Suppliers", icon: Truck, roles: ["admin", "manager"] },
+    { to: "/expenses", label: "Expenses", icon: Wallet, roles: ["admin", "manager"] },
+  ] },
+  { group: "Employees", items: [
+    { to: "/staff", label: "Staff", icon: UserCog, roles: ["admin"] },
+  ] },
+  { group: "Branch settings", items: [
+    { to: "/settings", label: "Settings", icon: SettingsIcon, roles: ["admin", "manager"] },
+  ] },
 ];
+
 
 function AppShell() {
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: roles } = useMyRoles();
+  const { data: shop } = useShopSettings();
+
   const [open, setOpen] = useState(false);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
 
@@ -107,36 +127,52 @@ function AppShell() {
           open ? "translate-x-0" : "-translate-x-full"
         } lg:translate-x-0`}
       >
-        <div className="px-5 py-5 flex items-center gap-2 border-b border-sidebar-border">
-          <div className="size-10 rounded-xl bg-sidebar-primary text-sidebar-primary-foreground grid place-items-center">
-            <ShoppingCart className="size-5" />
+        <div className="px-5 py-4 border-b border-sidebar-border">
+          <div className="flex items-center gap-2">
+            <div className="size-10 rounded-xl bg-sidebar-primary text-sidebar-primary-foreground grid place-items-center">
+              <ShoppingCart className="size-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-wider text-sidebar-foreground/50">Organization</div>
+              <div className="font-semibold leading-tight truncate">{shop?.shop_name || "Bazaar POS"}</div>
+            </div>
           </div>
-          <div>
-            <div className="font-semibold leading-tight">Bazaar POS</div>
-            <div className="text-xs text-sidebar-foreground/60">Supermarket billing</div>
+          <div className="mt-3 ml-3 pl-3 border-l border-sidebar-border">
+            <div className="text-[10px] uppercase tracking-wider text-sidebar-foreground/50">Branch</div>
+            <div className="text-sm text-sidebar-foreground/90">Main branch</div>
           </div>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
-          {nav.filter((n) => !n.roles || n.roles.some((r) => (roles ?? []).includes(r))).map((n) => {
-            const active = pathname === n.to || pathname.startsWith(n.to + "/");
-            const Icon = n.icon;
+        <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+          {NAV.map((g) => {
+            const items = g.items.filter((n) => !n.roles || n.roles.some((r) => (roles ?? []).includes(r)));
+            if (!items.length) return null;
             return (
-              <Link
-                key={n.to}
-                to={n.to}
-                onClick={() => setOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors ${
-                  active
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                }`}
-              >
-                <Icon className="size-4" />
-                {n.label}
-              </Link>
+              <div key={g.group} className="ml-3 pl-3 border-l border-sidebar-border/70 space-y-1">
+                <div className="px-1 pb-1 text-[10px] uppercase tracking-wider text-sidebar-foreground/45">{g.group}</div>
+                {items.map((n) => {
+                  const active = pathname === n.to || pathname.startsWith(n.to + "/");
+                  const Icon = n.icon;
+                  return (
+                    <Link
+                      key={n.to}
+                      to={n.to}
+                      onClick={() => setOpen(false)}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
+                        active
+                          ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                          : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      }`}
+                    >
+                      <Icon className="size-4" />
+                      {n.label}
+                    </Link>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>
+
         <div className="p-3 border-t border-sidebar-border space-y-2">
           {!online && (
             <div className="px-3 py-1.5 rounded-md bg-warning/20 text-warning text-xs flex items-center gap-2">

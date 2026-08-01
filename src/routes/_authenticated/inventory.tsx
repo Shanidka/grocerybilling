@@ -171,6 +171,11 @@ function StockTab() {
 }
 
 /* Purchases */
+type PurchaseRow = {
+  product_id: string; name: string; qty: string; cost: string;
+  hsn: string; mrp: string; tax_pct: string; barcode: string;
+};
+
 function PurchasesTab() {
   const qc = useQueryClient();
   const { data: products } = useProductsList();
@@ -185,10 +190,14 @@ function PurchasesTab() {
   });
   const [open, setOpen] = useState(false);
   const [supplier, setSupplier] = useState(""); const [invoice, setInvoice] = useState("");
-  const [items, setItems] = useState<Array<{ product_id: string; name: string; qty: string; cost: string }>>([]);
+  const [items, setItems] = useState<PurchaseRow[]>([]);
   const [ocrBusy, setOcrBusy] = useState(false);
+  const [newProductIdx, setNewProductIdx] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const ocrFn = useServerFn(extractInvoice);
+
+  const patch = (idx: number, p: Partial<PurchaseRow>) =>
+    setItems((arr) => arr.map((r, i) => (i === idx ? { ...r, ...p } : r)));
 
   const handleOcr = async (file: File) => {
     if (file.size > 8 * 1024 * 1024) return toast.error("File too large (max 8 MB)");
@@ -203,18 +212,29 @@ function PurchasesTab() {
       const res = await ocrFn({ data: { file_data_url: dataUrl, mime: file.type || "image/jpeg" } });
       if (res.supplier && !supplier) setSupplier(res.supplier);
       if (res.invoice_no && !invoice) setInvoice(res.invoice_no);
-      const matched = res.items.map((it) => {
+      const matched: PurchaseRow[] = res.items.map((it) => {
         const byBarcode = it.barcode ? products?.find((p) => p.barcode === it.barcode) : undefined;
         const byName = !byBarcode
           ? products?.find((p) => p.name.toLowerCase() === it.name.toLowerCase())
             ?? products?.find((p) => p.name.toLowerCase().includes(it.name.toLowerCase().slice(0, 12)))
           : undefined;
         const p = byBarcode ?? byName;
-        return { product_id: p?.id ?? "", name: p?.name ?? it.name, qty: String(it.qty), cost: String(it.cost || p?.purchase_price || 0) };
+        const qty = Number(it.qty) || 1;
+        const cost = Number(it.cost) || Number(p?.purchase_price) || 0;
+        return {
+          product_id: p?.id ?? "",
+          name: p?.name ?? it.name,
+          qty: String(qty),
+          cost: (Math.round(cost * 100) / 100).toFixed(2),
+          hsn: it.hsn ?? "",
+          mrp: String(it.mrp ?? p?.mrp ?? ""),
+          tax_pct: String(it.tax_pct ?? ""),
+          barcode: it.barcode ?? p?.barcode ?? "",
+        };
       });
       setItems((prev) => [...prev, ...matched]);
       const unmatched = matched.filter((m) => !m.product_id).length;
-      toast.success(`Imported ${matched.length} line(s)${unmatched ? ` — ${unmatched} need a product match` : ""}`);
+      toast.success(`Imported ${matched.length} line(s)${unmatched ? ` — ${unmatched} new product(s)` : ""}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "OCR failed");
     } finally {
@@ -223,19 +243,33 @@ function PurchasesTab() {
     }
   };
 
-  const addRow = () => setItems((i) => [...i, { product_id: "", name: "", qty: "1", cost: "0" }]);
+  const addRow = () => setItems((i) => [...i, { product_id: "", name: "", qty: "1", cost: "0", hsn: "", mrp: "", tax_pct: "", barcode: "" }]);
   const total = items.reduce((s, i) => s + Number(i.qty || 0) * Number(i.cost || 0), 0);
 
   const save = async () => {
     const rows = items.filter((i) => i.product_id && Number(i.qty) > 0);
-    if (rows.length === 0) return toast.error("Add at least one item");
+    if (rows.length === 0) return toast.error("Add at least one item (or save unmatched lines as products first)");
     const { data: userData } = await supabase.auth.getUser();
     const { data: entry, error } = await supabase.from("purchase_entries").insert({ supplier, invoice_no: invoice, total, created_by: userData.user!.id }).select().single();
     if (error) return toast.error(error.message);
     const { error: e2 } = await supabase.from("purchase_items").insert(
-      rows.map((r) => ({ entry_id: entry.id, product_id: r.product_id, name: r.name, qty: Number(r.qty), cost: Number(r.cost) }))
+      rows.map((r) => ({
+        entry_id: entry.id, product_id: r.product_id, name: r.name,
+        qty: Number(r.qty), cost: Number(r.cost),
+        hsn: r.hsn || null,
+        mrp: r.mrp ? Number(r.mrp) : null,
+        tax_pct: r.tax_pct ? Number(r.tax_pct) : 0,
+      }))
     );
     if (e2) return toast.error(e2.message);
+
+    // Keep supplier directory in sync
+    if (supplier.trim() && !suppliersList?.some((s) => s.name.toLowerCase() === supplier.trim().toLowerCase())) {
+      await supabase.from("suppliers").insert({ name: supplier.trim() });
+      qc.invalidateQueries({ queryKey: ["inv-suppliers"] });
+      qc.invalidateQueries({ queryKey: ["suppliers"] });
+    }
+
     toast.success("Purchase recorded, stock updated");
     setOpen(false); setSupplier(""); setInvoice(""); setItems([]);
     qc.invalidateQueries({ queryKey: ["inv-purchases"] });
@@ -249,7 +283,7 @@ function PurchasesTab() {
       <div className="flex justify-end">
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild><Button><Plus className="size-4" /> New purchase</Button></DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Record purchase</DialogTitle></DialogHeader>
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
@@ -262,7 +296,7 @@ function PurchasesTab() {
               <div><Label>Invoice No.</Label><Input value={invoice} onChange={(e) => setInvoice(e.target.value)} /></div>
             </div>
             <div className="rounded-md border border-dashed p-3 flex items-center justify-between gap-3 bg-muted/30">
-              <div className="text-xs text-muted-foreground">Auto-fill from invoice (photo, scan or PDF).</div>
+              <div className="text-xs text-muted-foreground">Auto-fill from invoice (photo, scan or PDF) — reads item, HSN, MRP, rate, tax and computes per-piece cost.</div>
               <div>
                 <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleOcr(f); }} />
@@ -272,27 +306,44 @@ function PurchasesTab() {
                 </Button>
               </div>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label>Items</Label>
                 <Button size="sm" variant="outline" onClick={addRow}>+ Add row</Button>
               </div>
               {items.map((it, idx) => (
-                <div key={idx} className="space-y-1">
+                <div key={idx} className="rounded-lg border p-3 space-y-2">
                   <div className="grid grid-cols-12 gap-2">
                     <Select value={it.product_id} onValueChange={(v) => {
                       const p = products?.find((x) => x.id === v);
-                      setItems((arr) => arr.map((r, i) => i === idx ? { ...r, product_id: v, name: p?.name ?? "", cost: String(p?.purchase_price ?? r.cost) } : r));
+                      patch(idx, { product_id: v, name: p?.name ?? "", cost: String(p?.purchase_price ?? it.cost) });
                     }}>
                       <SelectTrigger className="col-span-6"><SelectValue placeholder={it.name || "Product"} /></SelectTrigger>
                       <SelectContent>{products?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                     </Select>
-                    <Input className="col-span-3" type="number" step="0.001" placeholder="Qty" value={it.qty} onChange={(e) => setItems((arr) => arr.map((r, i) => i === idx ? { ...r, qty: e.target.value } : r))} />
-                    <Input className="col-span-3" type="number" step="0.01" placeholder="Cost" value={it.cost} onChange={(e) => setItems((arr) => arr.map((r, i) => i === idx ? { ...r, cost: e.target.value } : r))} />
+                    <Input className="col-span-3" type="number" step="0.001" placeholder="Qty" value={it.qty} onChange={(e) => patch(idx, { qty: e.target.value })} />
+                    <Input className="col-span-3" type="number" step="0.01" placeholder="Cost / piece" value={it.cost} onChange={(e) => patch(idx, { cost: e.target.value })} />
                   </div>
-                  {!it.product_id && it.name && (
-                    <div className="text-xs text-warning pl-1">From invoice: “{it.name}” — pick a matching product</div>
-                  )}
+                  <div className="grid grid-cols-12 gap-2">
+                    <Input className="col-span-3" placeholder="HSN" value={it.hsn} onChange={(e) => patch(idx, { hsn: e.target.value })} />
+                    <Input className="col-span-3" type="number" step="0.01" placeholder="MRP" value={it.mrp} onChange={(e) => patch(idx, { mrp: e.target.value })} />
+                    <Input className="col-span-2" type="number" step="0.01" placeholder="Tax %" value={it.tax_pct} onChange={(e) => patch(idx, { tax_pct: e.target.value })} />
+                    <Input className="col-span-3" placeholder="Barcode" value={it.barcode} onChange={(e) => patch(idx, { barcode: e.target.value })} />
+                    <Button size="icon" variant="ghost" className="col-span-1 text-destructive" onClick={() => setItems((arr) => arr.filter((_, i) => i !== idx))}>
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs text-muted-foreground">
+                      Line total {inr(Number(it.qty || 0) * Number(it.cost || 0))}
+                      {it.product_id ? "" : ` · “${it.name || "unnamed"}” is not in your product list`}
+                    </div>
+                    {!it.product_id && (
+                      <Button size="sm" variant="secondary" onClick={() => setNewProductIdx(idx)}>
+                        <Plus className="size-3.5" /> Add to products
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
               {items.length === 0 && <div className="text-sm text-muted-foreground">No rows — add items to the purchase.</div>}
@@ -302,6 +353,18 @@ function PurchasesTab() {
           </DialogContent>
         </Dialog>
       </div>
+
+      <NewProductFromInvoice
+        row={newProductIdx != null ? items[newProductIdx] : null}
+        onClose={() => setNewProductIdx(null)}
+        onCreated={(id, name, barcode) => {
+          if (newProductIdx != null) patch(newProductIdx, { product_id: id, name, barcode });
+          setNewProductIdx(null);
+          qc.invalidateQueries({ queryKey: ["inv-products"] });
+          qc.invalidateQueries({ queryKey: ["inv-stock"] });
+          qc.invalidateQueries({ queryKey: ["products"] });
+        }}
+      />
 
       <Card className="p-0 overflow-hidden">
         {!q.data?.length ? <div className="p-8 text-center text-sm text-muted-foreground">No purchases yet.</div> : (
@@ -328,6 +391,99 @@ function PurchasesTab() {
     </div>
   );
 }
+
+/* Save an unmatched invoice line as a new product (with barcode scanning) */
+function NewProductFromInvoice({ row, onClose, onCreated }: {
+  row: PurchaseRow | null;
+  onClose: () => void;
+  onCreated: (id: string, name: string, barcode: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [brand, setBrand] = useState("");
+  const [barcode, setBarcode] = useState("");
+  const [mrp, setMrp] = useState("");
+  const [cost, setCost] = useState("");
+  const [selling, setSelling] = useState("");
+  const [tax, setTax] = useState("");
+  const [minQty, setMinQty] = useState("5");
+  const [maxQty, setMaxQty] = useState("50");
+  const [scanOpen, setScanOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [seed, setSeed] = useState<PurchaseRow | null>(null);
+
+  if (row && row !== seed) {
+    setSeed(row);
+    setName(row.name); setBarcode(row.barcode); setMrp(row.mrp);
+    setCost(row.cost); setSelling(row.mrp || ""); setTax(row.tax_pct); setBrand("");
+  }
+
+  const save = async () => {
+    if (!name.trim()) return toast.error("Product name required");
+    setSaving(true);
+    try {
+      const purchase = Number(cost) || 0;
+      const sell = Number(selling) || Number(mrp) || 0;
+      const margin = purchase > 0 ? ((sell - purchase) / purchase) * 100 : 0;
+      const { data, error } = await supabase.from("products").insert({
+        name: name.trim(),
+        brand: brand.trim() || null,
+        barcode: barcode.trim() || null,
+        mrp: Number(mrp) || sell,
+        purchase_price: purchase,
+        selling_price: sell,
+        margin_pct: Math.round(margin * 100) / 100,
+        tax_pct: Number(tax) || 0,
+        min_qty: Number(minQty) || 0,
+        max_qty: Number(maxQty) || 0,
+        stock_qty: 0,
+        is_active: true,
+      }).select("id,name").single();
+      if (error) throw error;
+      toast.success(`${data.name} added to products`);
+      onCreated(data.id, data.name, barcode.trim());
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save product");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!row} onOpenChange={(v) => { if (!v) { setSeed(null); onClose(); } }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>Add “{row?.name}” to products</DialogTitle></DialogHeader>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div className="sm:col-span-2"><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+          <div><Label>Company / brand</Label><Input value={brand} onChange={(e) => setBrand(e.target.value)} /></div>
+          <div>
+            <Label>Barcode</Label>
+            <div className="flex gap-2">
+              <Input value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="Scan or type" />
+              <Button type="button" variant="outline" size="icon" onClick={() => setScanOpen(true)}><Camera className="size-4" /></Button>
+            </div>
+          </div>
+          <div><Label>Purchase price</Label><Input type="number" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} /></div>
+          <div><Label>MRP</Label><Input type="number" step="0.01" value={mrp} onChange={(e) => setMrp(e.target.value)} /></div>
+          <div><Label>Selling price</Label><Input type="number" step="0.01" value={selling} onChange={(e) => setSelling(e.target.value)} /></div>
+          <div><Label>Tax %</Label><Input type="number" step="0.01" value={tax} onChange={(e) => setTax(e.target.value)} /></div>
+          <div><Label>Min qty</Label><Input type="number" value={minQty} onChange={(e) => setMinQty(e.target.value)} /></div>
+          <div><Label>Max qty</Label><Input type="number" value={maxQty} onChange={(e) => setMaxQty(e.target.value)} /></div>
+        </div>
+        <p className="text-xs text-muted-foreground">Stock stays at 0 — saving the purchase adds the invoice quantity.</p>
+        <DialogFooter>
+          <Button onClick={save} disabled={saving}>{saving ? <Loader2 className="size-4 animate-spin" /> : null} Save product</Button>
+        </DialogFooter>
+      </DialogContent>
+      <CameraScanner
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        title="Scan product barcode"
+        onScan={(code) => { setBarcode(code); setScanOpen(false); toast.success(`Barcode ${code}`); }}
+      />
+    </Dialog>
+  );
+}
+
 
 /* Adjustments */
 function AdjustmentsTab() {

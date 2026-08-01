@@ -93,15 +93,21 @@ function RangePicker({ preset, setPreset, from, setFrom, to, setTo }:
   );
 }
 
-function Kpi({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "up" | "down" }) {
+function Kpi({ label, value, sub, tone, accent }: { label: string; value: string; sub?: string; tone?: "up" | "down"; accent?: boolean }) {
   return (
-    <Card className="p-4">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-xl font-semibold mt-1 tabular-nums">{value}</div>
-      {sub && <div className={`text-[11px] mt-1 ${tone === "up" ? "text-primary" : tone === "down" ? "text-destructive" : "text-muted-foreground"}`}>{sub}</div>}
+    <Card className={`relative p-4 overflow-hidden ${accent ? "bg-gradient-to-br from-primary/12 via-primary/5 to-transparent border-primary/30" : ""}`}>
+      <div className={`absolute inset-x-0 top-0 h-0.5 ${accent ? "bg-primary" : "bg-border"}`} />
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`${accent ? "text-2xl" : "text-xl"} font-semibold mt-1 tabular-nums`}>{value}</div>
+      {sub && (
+        <div className={`text-[11px] mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 ${
+          tone === "up" ? "bg-primary/10 text-primary" : tone === "down" ? "bg-destructive/10 text-destructive" : "text-muted-foreground"
+        }`}>{sub}</div>
+      )}
     </Card>
   );
 }
+
 
 /* ============ SALES ============ */
 type SaleRow = { id: string; bill_no: string; grand_total: number | string; tax_total: number | string; line_discount: number | string; bill_discount: number | string; payment_mode: string; customer_name: string | null; customer_phone: string | null; created_at: string; sale_items: Array<{ qty: number | string; line_total: number | string; name: string; product_id: string | null; cost_at_sale?: number | string }> };
@@ -179,13 +185,14 @@ function SalesTab() {
       <RangePicker preset={preset} setPreset={setPreset} from={from} setFrom={setFrom} to={to} setTo={setTo} />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Kpi label="Gross sales" value={inr(stats.gross)} sub={growthLabel} tone={growthTone} />
+        <Kpi accent label="Gross sales" value={inr(stats.gross)} sub={growthLabel} tone={growthTone} />
         <Kpi label="Bills" value={String(stats.count)} />
         <Kpi label="Avg bill" value={inr(stats.avg)} />
         <Kpi label="Highest bill" value={inr(stats.high)} />
         <Kpi label="Lowest bill" value={inr(stats.low)} />
         <Kpi label="Previous period" value={inr(prevGross)} />
       </div>
+
 
       <Card className="p-5">
         <h3 className="font-semibold mb-3">Sales trend</h3>
@@ -238,12 +245,16 @@ function SalesTab() {
       </div>
 
       <Card className="p-0 overflow-hidden">
-        <div className="flex items-center justify-between p-3 border-b">
+        <div className="flex items-center justify-between gap-2 p-3 border-b flex-wrap">
           <div className="font-semibold text-sm">Bills ({bills.length})</div>
-          <Button size="sm" variant="secondary" onClick={() => exportGSTCSV(bills, start, end)}>
-            <Download className="size-4" /> Monthly GST CSV
-          </Button>
+          <div className="flex items-center gap-2">
+            <GstExport />
+            <Button size="sm" variant="outline" onClick={() => exportGSTCSV(bills, start, end)}>
+              <Download className="size-4" /> Export current range
+            </Button>
+          </div>
         </div>
+
         {bills.length === 0 ? <Empty /> : (
           <div className="overflow-x-auto max-h-96">
             <table className="w-full text-sm">
@@ -726,6 +737,89 @@ function SlowMovingTab() {
 }
 
 function Empty() { return <div className="grid place-items-center h-full p-8 text-sm text-muted-foreground">No data in this range.</div>; }
+
+/* GST filing export — month / quarter / year */
+function gstPeriodRange(kind: "month" | "quarter" | "year", value: string) {
+  if (kind === "month") {
+    const [y, m] = value.split("-").map(Number);
+    return { start: new Date(y, m - 1, 1, 0, 0, 0), end: new Date(y, m, 0, 23, 59, 59) };
+  }
+  if (kind === "quarter") {
+    const [y, q] = value.split("-Q").map(Number);
+    const sm = (q - 1) * 3;
+    return { start: new Date(y, sm, 1, 0, 0, 0), end: new Date(y, sm + 3, 0, 23, 59, 59) };
+  }
+  const y = Number(value);
+  return { start: new Date(y, 0, 1, 0, 0, 0), end: new Date(y, 11, 31, 23, 59, 59) };
+}
+
+function GstExport() {
+  const now = new Date();
+  const [kind, setKind] = useState<"month" | "quarter" | "year">("month");
+  const [value, setValue] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  const [busy, setBusy] = useState(false);
+
+  const options = useMemo(() => {
+    const out: string[] = [];
+    if (kind === "month") {
+      for (let i = 0; i < 18; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+      }
+    } else if (kind === "quarter") {
+      for (let i = 0; i < 8; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i * 3, 1);
+        out.push(`${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`);
+      }
+    } else {
+      for (let i = 0; i < 5; i++) out.push(String(now.getFullYear() - i));
+    }
+    return Array.from(new Set(out));
+  }, [kind, now]);
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      const { start, end } = gstPeriodRange(kind, value);
+      const { data, error } = await supabase.from("sales")
+        .select("id,bill_no,grand_total,tax_total,line_discount,bill_discount,payment_mode,customer_name,customer_phone,created_at,sale_items(qty,line_total,name,product_id,cost_at_sale)")
+        .gte("created_at", start.toISOString()).lte("created_at", end.toISOString())
+        .order("created_at");
+      if (error) throw error;
+      exportGSTCSV((data ?? []) as unknown as SaleRow[], start, end);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <Select value={kind} onValueChange={(v) => {
+        const k = v as "month" | "quarter" | "year";
+        setKind(k);
+        setValue(k === "month" ? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+          : k === "quarter" ? `${now.getFullYear()}-Q${Math.floor(now.getMonth() / 3) + 1}`
+          : String(now.getFullYear()));
+      }}>
+        <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="month">Monthly</SelectItem>
+          <SelectItem value="quarter">Quarterly</SelectItem>
+          <SelectItem value="year">Yearly</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={value} onValueChange={setValue}>
+        <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
+        <SelectContent>{options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+      </Select>
+      <Button size="sm" variant="secondary" onClick={run} disabled={busy}>
+        <Download className="size-4" /> {busy ? "Preparing…" : "GST CSV"}
+      </Button>
+    </div>
+  );
+}
+
+
 
 /* CSV export */
 function exportGSTCSV(bills: SaleRow[], start: Date, end: Date) {

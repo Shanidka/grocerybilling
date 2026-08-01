@@ -17,7 +17,9 @@ import { toast } from "sonner";
 import { inr } from "@/lib/format";
 import { generateReceipt } from "@/lib/receipt";
 import { useShopSettings, parseScaleBarcode } from "@/lib/shop-settings";
+import { makeClientUid, makeOfflineBillNo, queueSale, adjustCachedStock, syncOfflineSales, pendingCount } from "@/lib/offline-sales";
 import QRCode from "qrcode";
+
 
 export const Route = createFileRoute("/_authenticated/billing")({
   ssr: false,
@@ -37,12 +39,31 @@ type CartLine = {
   sold_by: string; unit: string; mrp: number;
 };
 
+type HeldBill = {
+  id: string; label: string; cart: unknown; customer_name: string | null;
+  customer_phone: string | null; bill_discount: number | string; created_at: string;
+};
+
+const LOCAL_HELD_KEY = "bz_held_local";
+function readLocalHeld(): HeldBill[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_HELD_KEY);
+    return raw ? (JSON.parse(raw) as HeldBill[]) : [];
+  } catch { return []; }
+}
+function writeLocalHeld(list: HeldBill[]) {
+  try { localStorage.setItem(LOCAL_HELD_KEY, JSON.stringify(list)); } catch { /* ignore */ }
+}
+
 const PAYMENT_MODES = [
   { value: "cash", label: "Cash" },
   { value: "card", label: "Card" },
   { value: "upi", label: "UPI" },
   { value: "qr", label: "QR" },
+  { value: "split", label: "Split" },
 ];
+
+
 
 function Billing() {
   const qc = useQueryClient();
@@ -82,18 +103,24 @@ function Billing() {
 
   const products = productsQ.data ?? [];
 
-  // Held bills
+  // Held bills (falls back to this device's local store when offline)
   const heldQ = useQuery({
     queryKey: ["held-bills"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("held_bills")
-        .select("id,label,cart,customer_name,customer_phone,bill_discount,created_at")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
+      const local = readLocalHeld();
+      try {
+        const { data, error } = await supabase
+          .from("held_bills")
+          .select("id,label,cart,customer_name,customer_phone,bill_discount,created_at")
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+        return [...local, ...(data ?? [])];
+      } catch {
+        return local;
+      }
     },
   });
+
 
   const searchResults = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -164,37 +191,71 @@ function Billing() {
   const removeLine = (i: number) => setCart((c) => c.filter((_, idx) => idx !== i));
   const clearCart = () => { setCart([]); setBillDiscount(0); setCustomerName(""); setCustomerPhone(""); };
 
-  // Hold bill
+  // Hold bill (works offline — stored on this device)
   const holdBill = async () => {
     if (cart.length === 0) return;
-    const { data: u } = await supabase.auth.getUser();
-    if (!u.user) return;
+    const { data: sess } = await supabase.auth.getSession();
+    const uid = sess.session?.user.id;
+    if (!uid) return;
+    const label = customerName || `Bill ${new Date().toLocaleTimeString()}`;
     const { error } = await supabase.from("held_bills").insert({
-      cashier_id: u.user.id,
-      label: customerName || `Bill ${new Date().toLocaleTimeString()}`,
+      cashier_id: uid,
+      label,
       cart: cart as unknown as never,
       customer_name: customerName || null,
       customer_phone: customerPhone || null,
       bill_discount: billDiscount,
     });
-    if (error) { toast.error(error.message); return; }
-    toast.success("Bill held");
+    if (error) {
+      writeLocalHeld([
+        {
+          id: `local-${Date.now()}`, label: `${label} (offline)`, cart,
+          customer_name: customerName || null, customer_phone: customerPhone || null,
+          bill_discount: billDiscount, created_at: new Date().toISOString(),
+        },
+        ...readLocalHeld(),
+      ]);
+      toast.success("Bill held on this device");
+    } else {
+      toast.success("Bill held");
+    }
     clearCart();
     qc.invalidateQueries({ queryKey: ["held-bills"] });
   };
 
   const recallBill = async (id: string) => {
-    const held = heldQ.data?.find((h) => h.id === id);
+    const held = (heldQ.data as HeldBill[] | undefined)?.find((h) => h.id === id);
     if (!held) return;
     setCart(held.cart as unknown as CartLine[]);
     setCustomerName(held.customer_name ?? "");
     setCustomerPhone(held.customer_phone ?? "");
     setBillDiscount(Number(held.bill_discount ?? 0));
-    await supabase.from("held_bills").delete().eq("id", id);
+    if (id.startsWith("local-")) writeLocalHeld(readLocalHeld().filter((h) => h.id !== id));
+    else await supabase.from("held_bills").delete().eq("id", id);
     qc.invalidateQueries({ queryKey: ["held-bills"] });
     setRecallOpen(false);
     toast.success("Bill recalled");
   };
+
+
+  // Offline bill queue — auto-sync when connectivity returns
+  const [pending, setPending] = useState(0);
+  useEffect(() => {
+    const refresh = () => setPending(pendingCount());
+    refresh();
+    const run = async () => {
+      const n = await syncOfflineSales();
+      if (n > 0) {
+        toast.success(`${n} offline bill(s) synced`);
+        qc.invalidateQueries({ queryKey: ["billing-products"] });
+      }
+      refresh();
+    };
+    run();
+    window.addEventListener("online", run);
+    const iv = setInterval(run, 60_000);
+    return () => { window.removeEventListener("online", run); clearInterval(iv); };
+  }, [qc]);
 
   // Keyboard: F2 scan, F4 hold, F8 pay
   useEffect(() => {
@@ -219,7 +280,15 @@ function Billing() {
           </div>
           <div className="text-xs text-muted-foreground">F2 scan · F4 hold · F8 pay · / search</div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {pending > 0 && (
+            <button
+              onClick={async () => { const n = await syncOfflineSales(); setPending(pendingCount()); toast[n ? "success" : "info"](n ? `${n} bill(s) synced` : "Still offline"); }}
+              className="text-xs px-2.5 py-1.5 rounded-md bg-warning/15 text-warning font-medium"
+            >
+              {pending} bill(s) pending sync
+            </button>
+          )}
           <Button variant="outline" onClick={() => setRecallOpen(true)}>
             <Play className="size-4" /> Recall {heldQ.data?.length ? `(${heldQ.data.length})` : ""}
           </Button>
@@ -228,6 +297,7 @@ function Billing() {
           </Button>
         </div>
       </div>
+
 
       <div className="flex-1 grid lg:grid-cols-[1fr_420px] min-h-0">
         {/* Left: search + cart */}
@@ -396,7 +466,7 @@ function Billing() {
             <div className="py-8 text-center text-muted-foreground text-sm">No held bills.</div>
           ) : (
             <div className="divide-y max-h-96 overflow-auto -mx-6">
-              {heldQ.data.map((h) => {
+              {(heldQ.data as HeldBill[]).map((h) => {
                 const lines = (h.cart as unknown as CartLine[]) ?? [];
                 const total = lines.reduce((s, l) => s + l.unit_price * l.qty - l.discount, 0);
                 return (
@@ -455,57 +525,75 @@ function PaymentDialog({
   const [paid, setPaid] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [upiQr, setUpiQr] = useState<string | null>(null);
+  // Split / credit
+  const [sCash, setSCash] = useState(""); const [sCard, setSCard] = useState("");
+  const [sUpi, setSUpi] = useState(""); const [sCredit, setSCredit] = useState("");
 
   useEffect(() => {
-    if (!open) { setMode("cash"); setPaid(""); setUpiQr(null); }
-    else setPaid(totals.grand.toFixed(2));
+    if (!open) {
+      setMode("cash"); setPaid(""); setUpiQr(null);
+      setSCash(""); setSCard(""); setSUpi(""); setSCredit("");
+    } else setPaid(totals.grand.toFixed(2));
   }, [open, totals.grand]);
 
   useEffect(() => {
-    if (mode === "upi" || mode === "qr") {
+    if (mode === "upi" || mode === "qr" || mode === "split") {
       const pa = shop?.upi_id || "merchant@upi";
       const pn = encodeURIComponent(shop?.shop_name || "Supermarket");
-      const upi = `upi://pay?pa=${pa}&pn=${pn}&am=${totals.grand.toFixed(2)}&cu=INR&tn=Bill`;
+      const amt = mode === "split" ? Number(sUpi || 0) : totals.grand;
+      if (amt <= 0) { setUpiQr(null); return; }
+      const upi = `upi://pay?pa=${pa}&pn=${pn}&am=${amt.toFixed(2)}&cu=INR&tn=Bill`;
       QRCode.toDataURL(upi, { width: 220, margin: 1 }).then(setUpiQr).catch(() => setUpiQr(null));
     } else setUpiQr(null);
-  }, [mode, totals.grand, shop?.upi_id, shop?.shop_name]);
+  }, [mode, totals.grand, sUpi, shop?.upi_id, shop?.shop_name]);
+
+  const splitCash = Number(sCash) || 0, splitCard = Number(sCard) || 0;
+  const splitUpi = Number(sUpi) || 0, splitCredit = Number(sCredit) || 0;
+  const splitPaid = splitCash + splitCard + splitUpi;
+  const splitCovered = splitPaid + splitCredit;
+  const splitRemaining = Math.round((totals.grand - splitCovered) * 100) / 100;
 
   const paidNum = Number(paid) || 0;
-  const change = Math.max(0, paidNum - totals.grand);
-  const insufficient = mode === "cash" && paidNum < totals.grand;
+  const change = mode === "split"
+    ? Math.max(0, splitCovered - totals.grand)
+    : Math.max(0, paidNum - totals.grand);
+  const insufficient = mode === "split"
+    ? splitRemaining > 0.01 || (splitCredit > 0 && !customerName.trim() && !customerPhone.trim())
+    : mode === "cash" && paidNum < totals.grand;
 
   const complete = async () => {
     setLoading(true);
     try {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) throw new Error("Not signed in");
-      const { data: billNoRes, error: billErr } = await supabase.rpc("next_bill_no");
-      if (billErr) throw billErr;
-      const bill_no = billNoRes as unknown as string;
+      const { data: sess } = await supabase.auth.getSession();
+      const uid = sess.session?.user.id;
+      if (!uid) throw new Error("Not signed in");
 
-      const { data: saleRows, error: saleErr } = await supabase
-        .from("sales")
-        .insert({
-          bill_no,
-          cashier_id: u.user.id,
-          customer_name: customerName || null,
-          customer_phone: customerPhone || null,
-          subtotal: totals.subtotal,
-          tax_total: totals.taxTotal,
-          line_discount: totals.lineDisc,
-          bill_discount: totals.billDisc,
-          grand_total: totals.grand,
-          payment_mode: mode,
-          paid_amount: paidNum,
-          change_amount: change,
-          status: "completed",
-        })
-        .select("id,created_at")
-        .single();
-      if (saleErr) throw saleErr;
+      const split = mode === "split"
+        ? { amount_cash: splitCash, amount_card: splitCard, amount_upi: splitUpi, amount_other: 0, credit_amount: splitCredit, paid_amount: splitPaid }
+        : {
+            amount_cash: mode === "cash" ? Math.min(paidNum, totals.grand) : 0,
+            amount_card: mode === "card" ? totals.grand : 0,
+            amount_upi: mode === "upi" || mode === "qr" ? totals.grand : 0,
+            amount_other: 0,
+            credit_amount: 0,
+            paid_amount: paidNum,
+          };
 
-      const items = cart.map((l) => ({
-        sale_id: saleRows.id,
+      const saleBase = {
+        cashier_id: uid,
+        customer_name: customerName || null,
+        customer_phone: customerPhone || null,
+        subtotal: totals.subtotal,
+        tax_total: totals.taxTotal,
+        line_discount: totals.lineDisc,
+        bill_discount: totals.billDisc,
+        grand_total: totals.grand,
+        payment_mode: mode,
+        change_amount: change,
+        status: mode === "split" && splitCredit > 0 ? "credit" : "completed",
+        ...split,
+      };
+      const itemRows = cart.map((l) => ({
         product_id: l.product_id,
         name: l.name,
         qty: l.qty,
@@ -514,14 +602,51 @@ function PaymentDialog({
         line_discount: l.discount,
         line_total: l.unit_price * l.qty - l.discount,
       }));
-      const { error: itemsErr } = await supabase.from("sale_items").insert(items);
-      if (itemsErr) throw itemsErr;
 
-      const invoice_url = typeof window !== "undefined" ? `${window.location.origin}/i/${bill_no}` : undefined;
+      let bill_no = "";
+      let created_at = new Date().toISOString();
+      let offline = typeof navigator !== "undefined" && !navigator.onLine;
+
+      if (!offline) {
+        try {
+          const { data: billNoRes, error: billErr } = await supabase.rpc("next_bill_no");
+          if (billErr) throw billErr;
+          bill_no = billNoRes as unknown as string;
+          const { data: saleRow, error: saleErr } = await supabase
+            .from("sales")
+            .insert({ bill_no, client_uid: makeClientUid(), ...saleBase } as never)
+            .select("id,created_at")
+            .single();
+          if (saleErr) throw saleErr;
+          created_at = saleRow.created_at;
+          const { error: itemsErr } = await supabase
+            .from("sale_items")
+            .insert(itemRows.map((i) => ({ ...i, sale_id: saleRow.id })) as never);
+          if (itemsErr) throw itemsErr;
+        } catch {
+          offline = true;
+        }
+      }
+
+      if (offline) {
+        bill_no = makeOfflineBillNo();
+        queueSale({
+          client_uid: makeClientUid(),
+          bill_no, created_at, ...saleBase, items: itemRows,
+        });
+        adjustCachedStock(itemRows);
+        toast.warning(`Saved offline as ${bill_no} — will sync automatically`);
+      }
+
+      const invoice_url = !offline && typeof window !== "undefined" ? `${window.location.origin}/i/${bill_no}` : undefined;
       await generateReceipt({
-        bill_no, created_at: saleRows.created_at,
+        bill_no, created_at,
         customer_name: customerName, customer_phone: customerPhone,
-        payment_mode: mode, paid_amount: paidNum, change_amount: change,
+        payment_mode: mode === "split"
+          ? `Split (cash ${splitCash} / card ${splitCard} / upi ${splitUpi}${splitCredit ? ` / credit ${splitCredit}` : ""})`
+          : mode,
+        paid_amount: mode === "split" ? splitPaid : paidNum,
+        change_amount: change,
         items: cart.map((l) => ({
           name: l.name + (l.sold_by === "weight" ? ` (${l.qty.toFixed(3)}kg)` : ""),
           qty: l.qty, unit_price: l.unit_price, tax_pct: l.tax_pct,
@@ -536,7 +661,7 @@ function PaymentDialog({
         } : undefined,
       });
 
-      toast.success(`Bill ${bill_no} completed`);
+      if (!offline) toast.success(`Bill ${bill_no} completed`);
       onCompleted(bill_no, customerPhone, totals.grand);
       onClose();
     } catch (e: unknown) {
@@ -557,7 +682,7 @@ function PaymentDialog({
         </DialogHeader>
 
         <Tabs value={mode} onValueChange={setMode}>
-          <TabsList className="grid grid-cols-4 w-full">
+          <TabsList className="grid grid-cols-5 w-full">
             {PAYMENT_MODES.map((m) => <TabsTrigger key={m.value} value={m.value}>{m.label}</TabsTrigger>)}
           </TabsList>
 
@@ -593,9 +718,31 @@ function PaymentDialog({
             <TabsContent key={m} value={m} className="pt-4 text-center space-y-2">
               {upiQr ? <img src={upiQr} alt="UPI QR" className="mx-auto rounded-md border" /> : <div className="h-[220px] grid place-items-center"><QrCode className="size-12 text-muted-foreground" /></div>}
               <p className="text-sm font-medium">Pay {inr(totals.grand)} via UPI</p>
-              <p className="text-xs text-muted-foreground">Scan with any UPI app · Demo merchant ID</p>
+              <p className="text-xs text-muted-foreground">Scan with any UPI app</p>
             </TabsContent>
           ))}
+
+          <TabsContent value="split" className="pt-4 space-y-3">
+            <p className="text-xs text-muted-foreground">Split the bill across modes. Anything left as <b>Credit</b> is recorded as unpaid (khata) against the customer.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">Cash</Label><Input type="number" value={sCash} onChange={(e) => setSCash(e.target.value)} placeholder="0" /></div>
+              <div><Label className="text-xs">Card</Label><Input type="number" value={sCard} onChange={(e) => setSCard(e.target.value)} placeholder="0" /></div>
+              <div><Label className="text-xs">UPI</Label><Input type="number" value={sUpi} onChange={(e) => setSUpi(e.target.value)} placeholder="0" /></div>
+              <div><Label className="text-xs">Credit (unpaid)</Label><Input type="number" value={sCredit} onChange={(e) => setSCredit(e.target.value)} placeholder="0" /></div>
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={() => setSCash(Math.max(0, splitRemaining + splitCash).toFixed(2))}>Rest to cash</Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => setSCredit(Math.max(0, splitRemaining + splitCredit).toFixed(2))}>Rest to credit</Button>
+            </div>
+            <div className={`flex justify-between rounded-md p-3 ${Math.abs(splitRemaining) < 0.01 ? "bg-muted" : "bg-warning/15 text-warning"}`}>
+              <span className="text-sm">{splitRemaining > 0 ? "Still to allocate" : splitRemaining < 0 ? "Change to return" : "Fully allocated"}</span>
+              <span className="font-semibold tabular-nums">{inr(Math.abs(splitRemaining))}</span>
+            </div>
+            {splitCredit > 0 && !customerName.trim() && !customerPhone.trim() && (
+              <p className="text-xs text-destructive">Add a customer name or phone before recording credit.</p>
+            )}
+            {splitUpi > 0 && upiQr && <img src={upiQr} alt="UPI QR" className="mx-auto rounded-md border" />}
+          </TabsContent>
         </Tabs>
 
         <DialogFooter className="gap-2">
@@ -609,6 +756,7 @@ function PaymentDialog({
     </Dialog>
   );
 }
+
 
 function ShareBillDialog({ info, onClose }: { info: { billNo: string; phone: string; total: number } | null; onClose: () => void }) {
   const url = info && typeof window !== "undefined" ? `${window.location.origin}/i/${info.billNo}` : "";
