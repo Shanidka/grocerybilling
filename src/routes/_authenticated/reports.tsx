@@ -245,12 +245,16 @@ function SalesTab() {
       </div>
 
       <Card className="p-0 overflow-hidden">
-        <div className="flex items-center justify-between p-3 border-b">
+        <div className="flex items-center justify-between gap-2 p-3 border-b flex-wrap">
           <div className="font-semibold text-sm">Bills ({bills.length})</div>
-          <Button size="sm" variant="secondary" onClick={() => exportGSTCSV(bills, start, end)}>
-            <Download className="size-4" /> Monthly GST CSV
-          </Button>
+          <div className="flex items-center gap-2">
+            <GstExport />
+            <Button size="sm" variant="outline" onClick={() => exportGSTCSV(bills, start, end)}>
+              <Download className="size-4" /> Export current range
+            </Button>
+          </div>
         </div>
+
         {bills.length === 0 ? <Empty /> : (
           <div className="overflow-x-auto max-h-96">
             <table className="w-full text-sm">
