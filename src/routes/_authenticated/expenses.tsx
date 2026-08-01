@@ -109,16 +109,25 @@ function ExpensesPage() {
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2"><Wallet className="size-6" /> Expenses</h1>
           <p className="text-sm text-muted-foreground">Everything going out — rent, salaries, utilities, purchases and more.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Select value={range} onValueChange={(v) => setRange(v as "7d" | "30d" | "mtd" | "ytd")}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={range} onValueChange={(v) => setRange(v as typeof range)}>
             <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="7d">Last 7 days</SelectItem>
               <SelectItem value="30d">Last 30 days</SelectItem>
               <SelectItem value="mtd">This month</SelectItem>
               <SelectItem value="ytd">This year</SelectItem>
+              <SelectItem value="custom">Custom dates</SelectItem>
             </SelectContent>
           </Select>
+          {range === "custom" && (
+            <div className="flex items-center gap-2">
+              <Input type="date" className="w-40" value={cFrom} onChange={(e) => setCFrom(e.target.value)} />
+              <span className="text-muted-foreground">→</span>
+              <Input type="date" className="w-40" value={cTo} onChange={(e) => setCTo(e.target.value)} />
+            </div>
+          )}
+
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild><Button><Plus className="size-4" /> Add expense</Button></DialogTrigger>
             <DialogContent>
