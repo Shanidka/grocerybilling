@@ -185,13 +185,14 @@ function SalesTab() {
       <RangePicker preset={preset} setPreset={setPreset} from={from} setFrom={setFrom} to={to} setTo={setTo} />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Kpi label="Gross sales" value={inr(stats.gross)} sub={growthLabel} tone={growthTone} />
+        <Kpi accent label="Gross sales" value={inr(stats.gross)} sub={growthLabel} tone={growthTone} />
         <Kpi label="Bills" value={String(stats.count)} />
         <Kpi label="Avg bill" value={inr(stats.avg)} />
         <Kpi label="Highest bill" value={inr(stats.high)} />
         <Kpi label="Lowest bill" value={inr(stats.low)} />
         <Kpi label="Previous period" value={inr(prevGross)} />
       </div>
+
 
       <Card className="p-5">
         <h3 className="font-semibold mb-3">Sales trend</h3>
