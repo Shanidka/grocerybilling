@@ -33,7 +33,9 @@ function ExpensesPage() {
   if (!isLoading && !canManage(roles)) return <Navigate to="/dashboard" />;
 
   const qc = useQueryClient();
-  const [range, setRange] = useState<"7d" | "30d" | "mtd" | "ytd">("30d");
+  const [range, setRange] = useState<"7d" | "30d" | "mtd" | "ytd" | "custom">("30d");
+  const [cFrom, setCFrom] = useState("");
+  const [cTo, setCTo] = useState("");
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [amount, setAmount] = useState("");
@@ -49,11 +51,17 @@ function ExpensesPage() {
     else if (range === "30d") s.setDate(s.getDate() - 29);
     else if (range === "mtd") s.setDate(1);
     else if (range === "ytd") { s.setMonth(0); s.setDate(1); }
+    else if (range === "custom") {
+      return {
+        start: cFrom ? new Date(cFrom + "T00:00:00") : new Date(2000, 0, 1),
+        end: cTo ? new Date(cTo + "T23:59:59") : e,
+      };
+    }
     return { start: s, end: e };
-  }, [range]);
+  }, [range, cFrom, cTo]);
 
   const list = useQuery({
-    queryKey: ["expenses", range],
+    queryKey: ["expenses", range, cFrom, cTo],
     queryFn: async () => {
       const { data, error } = await supabase.from("expenses")
         .select("id,category,amount,spent_on,payee,payment_mode,notes,created_at")
@@ -64,6 +72,7 @@ function ExpensesPage() {
       return data ?? [];
     },
   });
+
 
   const totals = useMemo(() => {
     const rows = list.data ?? [];
