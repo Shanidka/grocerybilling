@@ -738,6 +738,89 @@ function SlowMovingTab() {
 
 function Empty() { return <div className="grid place-items-center h-full p-8 text-sm text-muted-foreground">No data in this range.</div>; }
 
+/* GST filing export — month / quarter / year */
+function gstPeriodRange(kind: "month" | "quarter" | "year", value: string) {
+  if (kind === "month") {
+    const [y, m] = value.split("-").map(Number);
+    return { start: new Date(y, m - 1, 1, 0, 0, 0), end: new Date(y, m, 0, 23, 59, 59) };
+  }
+  if (kind === "quarter") {
+    const [y, q] = value.split("-Q").map(Number);
+    const sm = (q - 1) * 3;
+    return { start: new Date(y, sm, 1, 0, 0, 0), end: new Date(y, sm + 3, 0, 23, 59, 59) };
+  }
+  const y = Number(value);
+  return { start: new Date(y, 0, 1, 0, 0, 0), end: new Date(y, 11, 31, 23, 59, 59) };
+}
+
+function GstExport() {
+  const now = new Date();
+  const [kind, setKind] = useState<"month" | "quarter" | "year">("month");
+  const [value, setValue] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  const [busy, setBusy] = useState(false);
+
+  const options = useMemo(() => {
+    const out: string[] = [];
+    if (kind === "month") {
+      for (let i = 0; i < 18; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+      }
+    } else if (kind === "quarter") {
+      for (let i = 0; i < 8; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i * 3, 1);
+        out.push(`${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`);
+      }
+    } else {
+      for (let i = 0; i < 5; i++) out.push(String(now.getFullYear() - i));
+    }
+    return Array.from(new Set(out));
+  }, [kind, now]);
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      const { start, end } = gstPeriodRange(kind, value);
+      const { data, error } = await supabase.from("sales")
+        .select("id,bill_no,grand_total,tax_total,line_discount,bill_discount,payment_mode,customer_name,customer_phone,created_at,sale_items(qty,line_total,name,product_id,cost_at_sale)")
+        .gte("created_at", start.toISOString()).lte("created_at", end.toISOString())
+        .order("created_at");
+      if (error) throw error;
+      exportGSTCSV((data ?? []) as unknown as SaleRow[], start, end);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <Select value={kind} onValueChange={(v) => {
+        const k = v as "month" | "quarter" | "year";
+        setKind(k);
+        setValue(k === "month" ? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+          : k === "quarter" ? `${now.getFullYear()}-Q${Math.floor(now.getMonth() / 3) + 1}`
+          : String(now.getFullYear()));
+      }}>
+        <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="month">Monthly</SelectItem>
+          <SelectItem value="quarter">Quarterly</SelectItem>
+          <SelectItem value="year">Yearly</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={value} onValueChange={setValue}>
+        <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
+        <SelectContent>{options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+      </Select>
+      <Button size="sm" variant="secondary" onClick={run} disabled={busy}>
+        <Download className="size-4" /> {busy ? "Preparing…" : "GST CSV"}
+      </Button>
+    </div>
+  );
+}
+
+
+
 /* CSV export */
 function exportGSTCSV(bills: SaleRow[], start: Date, end: Date) {
   const header = ["Bill No", "Date", "Customer", "Phone", "Payment", "Discount", "Taxable", "GST", "Total"];
