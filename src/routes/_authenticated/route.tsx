@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { useMyRoles } from "@/hooks/use-role";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useShopSettings } from "@/lib/shop-settings";
+
 
 const INACTIVITY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
