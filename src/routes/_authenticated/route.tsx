@@ -33,20 +33,36 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 type Role = "admin" | "manager" | "cashier";
-const nav: Array<{ to: string; label: string; icon: typeof LayoutDashboard; roles?: Role[] }> = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/billing", label: "Billing", icon: ScanBarcode },
-  { to: "/products", label: "Products", icon: Package },
-  { to: "/inventory", label: "Inventory", icon: Boxes },
-  { to: "/purchase-orders", label: "Purchase Orders", icon: ClipboardList, roles: ["admin", "manager"] },
-  { to: "/alerts", label: "Alerts", icon: AlertTriangle },
-  { to: "/customers", label: "Customers", icon: Users },
-  { to: "/suppliers", label: "Suppliers", icon: Truck, roles: ["admin", "manager"] },
-  { to: "/expenses", label: "Expenses", icon: Wallet, roles: ["admin", "manager"] },
-  { to: "/reports", label: "Reports", icon: BarChart3, roles: ["admin", "manager"] },
-  { to: "/staff", label: "Staff", icon: UserCog, roles: ["admin"] },
-  { to: "/settings", label: "Settings", icon: SettingsIcon, roles: ["admin", "manager"] },
+type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; roles?: Role[] };
+type NavGroup = { group: string; items: NavItem[] };
+
+const NAV: NavGroup[] = [
+  { group: "Overview", items: [
+    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/alerts", label: "Alerts", icon: AlertTriangle },
+  ] },
+  { group: "Sales", items: [
+    { to: "/billing", label: "Billing", icon: ScanBarcode },
+    { to: "/customers", label: "Customers", icon: Users },
+    { to: "/reports", label: "Reports", icon: BarChart3, roles: ["admin", "manager"] },
+  ] },
+  { group: "Products", items: [
+    { to: "/products", label: "Products", icon: Package },
+    { to: "/inventory", label: "Inventory", icon: Boxes },
+  ] },
+  { group: "Purchases", items: [
+    { to: "/purchase-orders", label: "Purchase Orders", icon: ClipboardList, roles: ["admin", "manager"] },
+    { to: "/suppliers", label: "Suppliers", icon: Truck, roles: ["admin", "manager"] },
+    { to: "/expenses", label: "Expenses", icon: Wallet, roles: ["admin", "manager"] },
+  ] },
+  { group: "Employees", items: [
+    { to: "/staff", label: "Staff", icon: UserCog, roles: ["admin"] },
+  ] },
+  { group: "Branch settings", items: [
+    { to: "/settings", label: "Settings", icon: SettingsIcon, roles: ["admin", "manager"] },
+  ] },
 ];
+
 
 function AppShell() {
   const router = useRouter();
