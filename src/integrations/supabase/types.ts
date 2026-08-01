@@ -592,11 +592,17 @@ export type Database = {
       }
       sales: {
         Row: {
+          amount_card: number
+          amount_cash: number
+          amount_other: number
+          amount_upi: number
           bill_discount: number
           bill_no: string
           cashier_id: string
           change_amount: number
+          client_uid: string | null
           created_at: string
+          credit_amount: number
           customer_name: string | null
           customer_phone: string | null
           grand_total: number
@@ -610,11 +616,17 @@ export type Database = {
           tax_total: number
         }
         Insert: {
+          amount_card?: number
+          amount_cash?: number
+          amount_other?: number
+          amount_upi?: number
           bill_discount?: number
           bill_no: string
           cashier_id: string
           change_amount?: number
+          client_uid?: string | null
           created_at?: string
+          credit_amount?: number
           customer_name?: string | null
           customer_phone?: string | null
           grand_total?: number
@@ -628,11 +640,17 @@ export type Database = {
           tax_total?: number
         }
         Update: {
+          amount_card?: number
+          amount_cash?: number
+          amount_other?: number
+          amount_upi?: number
           bill_discount?: number
           bill_no?: string
           cashier_id?: string
           change_amount?: number
+          client_uid?: string | null
           created_at?: string
+          credit_amount?: number
           customer_name?: string | null
           customer_phone?: string | null
           grand_total?: number

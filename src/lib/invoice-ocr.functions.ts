@@ -38,11 +38,17 @@ Respond ONLY with compact JSON matching this exact schema:
   ]
 }
 Rules:
-- "cost" is the per-unit purchase rate (NOT the line total). If only line totals are present, divide by qty.
-- Ignore discount, taxable value, CGST/SGST/IGST subtotal rows — only real product rows go in items.
-- Prefer the product/description column for "name". Strip HSN codes from name.
+- "cost" is the PER-PIECE purchase rate excluding scheme discounts. If the invoice shows only a line total, compute cost = line_total / qty (round to 2 decimals). If free/scheme quantity is shown, add it to qty before dividing.
+- If qty is written as cases/boxes with a pack size (e.g. "2 CTN x 12"), set qty to the total pieces (24) and divide accordingly.
+- "hsn" is the HSN/SAC code column, digits only.
+- "tax_pct" is the total GST rate for that line: if CGST% and SGST% appear separately, add them together (e.g. 2.5 + 2.5 = 5). If only IGST% appears, use it. If no tax column, use 0.
+- "mrp" is the printed MRP / retail price column, per piece — never the purchase rate.
+- "barcode" only when an EAN/UPC style 8–13 digit product code is printed on the row.
+- Ignore discount, taxable value, CGST/SGST/IGST subtotal rows and freight/round-off rows — only real product rows go in items.
+- Prefer the product/description column for "name". Strip HSN codes, pack codes and tax words from name.
 - If a field is missing, use null.
 - Never wrap output in markdown, never explain.`;
+
 
 export const extractInvoice = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => Input.parse(d))
