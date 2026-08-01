@@ -93,15 +93,21 @@ function RangePicker({ preset, setPreset, from, setFrom, to, setTo }:
   );
 }
 
-function Kpi({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "up" | "down" }) {
+function Kpi({ label, value, sub, tone, accent }: { label: string; value: string; sub?: string; tone?: "up" | "down"; accent?: boolean }) {
   return (
-    <Card className="p-4">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-xl font-semibold mt-1 tabular-nums">{value}</div>
-      {sub && <div className={`text-[11px] mt-1 ${tone === "up" ? "text-primary" : tone === "down" ? "text-destructive" : "text-muted-foreground"}`}>{sub}</div>}
+    <Card className={`relative p-4 overflow-hidden ${accent ? "bg-gradient-to-br from-primary/12 via-primary/5 to-transparent border-primary/30" : ""}`}>
+      <div className={`absolute inset-x-0 top-0 h-0.5 ${accent ? "bg-primary" : "bg-border"}`} />
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`${accent ? "text-2xl" : "text-xl"} font-semibold mt-1 tabular-nums`}>{value}</div>
+      {sub && (
+        <div className={`text-[11px] mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 ${
+          tone === "up" ? "bg-primary/10 text-primary" : tone === "down" ? "bg-destructive/10 text-destructive" : "text-muted-foreground"
+        }`}>{sub}</div>
+      )}
     </Card>
   );
 }
+
 
 /* ============ SALES ============ */
 type SaleRow = { id: string; bill_no: string; grand_total: number | string; tax_total: number | string; line_discount: number | string; bill_discount: number | string; payment_mode: string; customer_name: string | null; customer_phone: string | null; created_at: string; sale_items: Array<{ qty: number | string; line_total: number | string; name: string; product_id: string | null; cost_at_sale?: number | string }> };
