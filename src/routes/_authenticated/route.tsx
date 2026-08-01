@@ -68,6 +68,8 @@ function AppShell() {
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: roles } = useMyRoles();
+  const { data: shop } = useShopSettings();
+
   const [open, setOpen] = useState(false);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
 
