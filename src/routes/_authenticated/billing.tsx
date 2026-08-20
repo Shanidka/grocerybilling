@@ -567,6 +567,11 @@ function PaymentDialog({
       const { data: sess } = await supabase.auth.getSession();
       const uid = sess.session?.user.id;
       if (!uid) throw new Error("Not signed in");
+      let billerName = "";
+      try {
+        const { data: prof } = await supabase.from("profiles").select("full_name").eq("id", uid).maybeSingle();
+        billerName = (prof?.full_name || (sess.session?.user.user_metadata?.full_name as string) || sess.session?.user.email || "").trim().split(/[\s@]+/)[0] ?? "";
+      } catch { /* offline — skip */ }
 
       const split = mode === "split"
         ? { amount_cash: splitCash, amount_card: splitCard, amount_upi: splitUpi, amount_other: 0, credit_amount: splitCredit, paid_amount: splitPaid }
@@ -641,6 +646,7 @@ function PaymentDialog({
       const invoice_url = !offline && typeof window !== "undefined" ? `${window.location.origin}/i/${bill_no}` : undefined;
       await generateReceipt({
         bill_no, created_at,
+        cashier_name: billerName || undefined,
         customer_name: customerName, customer_phone: customerPhone,
         payment_mode: mode === "split"
           ? `Split (cash ${splitCash} / card ${splitCard} / upi ${splitUpi}${splitCredit ? ` / credit ${splitCredit}` : ""})`
