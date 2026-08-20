@@ -737,7 +737,7 @@ function BelowMinTab() {
     queryKey: ["inv-belowmin"],
     queryFn: async () => {
       const { data, error } = await supabase.from("products")
-        .select("id,name,brand,unit,stock_qty,min_qty,max_qty,purchase_price").eq("is_active", true);
+        .select("id,name,brand,unit,stock_qty,min_qty,max_qty,purchase_price,mrp,net_weight_g").eq("is_active", true);
       if (error) throw error;
       return (data ?? []).filter((p) => Number(p.stock_qty) <= Number(p.min_qty) && Number(p.min_qty) > 0);
     },
@@ -793,7 +793,15 @@ function BelowMinTab() {
       .select().single();
     if (error) return toast.error(error.message);
     const { error: e2 } = await supabase.from("purchase_order_items").insert(
-      draft.map((l) => ({ po_id: po.id, product_id: l.product_id, product_name: l.name, qty: l.qty, unit: l.unit }))
+      draft.map((l) => {
+        const prod = (q.data ?? []).find((p) => p.id === l.product_id);
+        return {
+          po_id: po.id, product_id: l.product_id, product_name: l.name, qty: l.qty, unit: l.unit,
+          weight_g: prod?.net_weight_g ?? null,
+          unit_cost: Number(prod?.purchase_price ?? 0),
+          mrp: Number(prod?.mrp ?? 0),
+        };
+      })
     );
     if (e2) return toast.error(e2.message);
     toast.success(`Order ${order_no} created`);

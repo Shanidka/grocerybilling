@@ -567,6 +567,11 @@ function PaymentDialog({
       const { data: sess } = await supabase.auth.getSession();
       const uid = sess.session?.user.id;
       if (!uid) throw new Error("Not signed in");
+      let billerName = "";
+      try {
+        const { data: prof } = await supabase.from("profiles").select("full_name").eq("id", uid).maybeSingle();
+        billerName = (prof?.full_name || (sess.session?.user.user_metadata?.full_name as string) || sess.session?.user.email || "").trim().split(/[\s@]+/)[0] ?? "";
+      } catch { /* offline — skip */ }
 
       const split = mode === "split"
         ? { amount_cash: splitCash, amount_card: splitCard, amount_upi: splitUpi, amount_other: 0, credit_amount: splitCredit, paid_amount: splitPaid }
@@ -641,6 +646,7 @@ function PaymentDialog({
       const invoice_url = !offline && typeof window !== "undefined" ? `${window.location.origin}/i/${bill_no}` : undefined;
       await generateReceipt({
         bill_no, created_at,
+        cashier_name: billerName || undefined,
         customer_name: customerName, customer_phone: customerPhone,
         payment_mode: mode === "split"
           ? `Split (cash ${splitCash} / card ${splitCard} / upi ${splitUpi}${splitCredit ? ` / credit ${splitCredit}` : ""})`
@@ -717,8 +723,9 @@ function PaymentDialog({
           {(["upi", "qr"] as const).map((m) => (
             <TabsContent key={m} value={m} className="pt-4 text-center space-y-2">
               {upiQr ? <img src={upiQr} alt="UPI QR" className="mx-auto rounded-md border" /> : <div className="h-[220px] grid place-items-center"><QrCode className="size-12 text-muted-foreground" /></div>}
-              <p className="text-sm font-medium">Pay {inr(totals.grand)} via UPI</p>
-              <p className="text-xs text-muted-foreground">Scan with any UPI app</p>
+              <p className="text-sm font-medium">Pay {inr(totals.grand)} to {shop?.shop_name ?? "shop"}</p>
+              <p className="text-xs text-muted-foreground">Scan with any UPI app{shop?.upi_id ? ` · ${shop.upi_id}` : ""}</p>
+
             </TabsContent>
           ))}
 
