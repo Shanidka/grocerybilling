@@ -723,8 +723,9 @@ function PaymentDialog({
           {(["upi", "qr"] as const).map((m) => (
             <TabsContent key={m} value={m} className="pt-4 text-center space-y-2">
               {upiQr ? <img src={upiQr} alt="UPI QR" className="mx-auto rounded-md border" /> : <div className="h-[220px] grid place-items-center"><QrCode className="size-12 text-muted-foreground" /></div>}
-              <p className="text-sm font-medium">Pay {inr(totals.grand)} via UPI</p>
-              <p className="text-xs text-muted-foreground">Scan with any UPI app</p>
+              <p className="text-sm font-medium">Pay {inr(totals.grand)} to {shop?.shop_name ?? "shop"}</p>
+              <p className="text-xs text-muted-foreground">Scan with any UPI app{shop?.upi_id ? ` · ${shop.upi_id}` : ""}</p>
+
             </TabsContent>
           ))}
 
