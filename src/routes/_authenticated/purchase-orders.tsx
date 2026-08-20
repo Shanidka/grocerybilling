@@ -381,7 +381,10 @@ function printPO(po: PO) {
       tfoot td{font-weight:600;background:#f9f9f9}
       .sig{margin-top:60px;display:flex;justify-content:space-between}
       .sig div{border-top:1px solid #333;padding-top:4px;width:200px;text-align:center;font-size:12px;color:#444}
-      @media print{body{padding:12px}}
+      .toolbar{position:fixed;top:12px;right:12px;display:flex;gap:8px}
+      .toolbar button{font-size:13px;padding:8px 14px;border-radius:8px;border:1px solid #111;background:#111;color:#fff;cursor:pointer}
+      .toolbar button.ghost{background:#fff;color:#111}
+      @media print{body{padding:12px}.toolbar{display:none}}
     </style></head><body>
       <h1>Purchase Order</h1>
       <div class="muted">${po.order_no ?? ""} · Created ${new Date(po.created_at).toLocaleString("en-IN")}</div>
@@ -397,7 +400,11 @@ function printPO(po: PO) {
       </table>
       ${po.notes ? `<p class="muted"><strong>Notes:</strong> ${escapeHtml(po.notes)}</p>` : ""}
       <div class="sig"><div>Prepared by</div><div>Received by</div></div>
-      <script>window.onload=()=>window.print()</script>
+      <div class="toolbar">
+        <button onclick="window.print()">Print</button>
+        <button class="ghost" onclick="window.close()">Close</button>
+      </div>
+      <script>window.onload=()=>setTimeout(()=>window.print(),300)</script>
     </body></html>`;
   const w = window.open("", "_blank", "width=800,height=900");
   if (!w) return toast.error("Popup blocked");
