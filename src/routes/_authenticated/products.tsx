@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { useStoreId } from "@/lib/active-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,11 +51,12 @@ function ProductsPage() {
   const [saving, setSaving] = useState(false);
   const [autoFillEnabled, setAutoFillEnabled] = useState(false);
   const lookupFn = useServerFn(lookupBarcode);
+  const storeId = useStoreId();
 
   const productsQ = useQuery({
-    queryKey: ["all-products"],
+    queryKey: ["all-products", storeId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("products").select("*").order("name");
+      const { data, error } = await supabase.from("products").select("*").eq("store_id", storeId).order("name");
       if (error) throw error;
       return (data ?? []) as unknown as ProductRow[];
     },
@@ -147,6 +149,7 @@ function ProductsPage() {
       mfg_date: form.mfg_date || null,
       expiry_date: form.expiry_date || null,
       is_active: form.is_active,
+      store_id: storeId,
     };
     const res = editing
       ? await supabase.from("products").update(payload).eq("id", editing.id)

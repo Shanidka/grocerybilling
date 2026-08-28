@@ -12,6 +12,7 @@ export type QueuedSaleItem = {
 
 export type QueuedSale = {
   client_uid: string;
+  store_id?: string;
   bill_no: string;
   created_at: string;
   cashier_id: string;
@@ -73,9 +74,10 @@ export function makeOfflineBillNo(): string {
 }
 
 /** Locally adjust the cached product stock so offline billing keeps sane stock numbers. */
-export function adjustCachedStock(lines: Array<{ product_id: string | null; qty: number }>) {
+export function adjustCachedStock(lines: Array<{ product_id: string | null; qty: number }>, storeId?: string) {
+  const key = storeId ? `bz_products_${storeId}` : "bz_products";
   try {
-    const raw = localStorage.getItem("bz_products");
+    const raw = localStorage.getItem(key);
     if (!raw) return;
     const list = JSON.parse(raw) as Array<{ id: string; stock_qty: number }>;
     for (const l of lines) {
@@ -83,7 +85,7 @@ export function adjustCachedStock(lines: Array<{ product_id: string | null; qty:
       const p = list.find((x) => x.id === l.product_id);
       if (p) p.stock_qty = Number(p.stock_qty) - l.qty;
     }
-    localStorage.setItem("bz_products", JSON.stringify(list));
+    localStorage.setItem(key, JSON.stringify(list));
   } catch { /* ignore */ }
 }
 
