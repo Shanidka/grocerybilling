@@ -1,5 +1,6 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { useStoreId } from "@/lib/active-store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
@@ -61,10 +62,11 @@ function ExpensesPage() {
   }, [range, cFrom, cTo]);
 
   const list = useQuery({
-    queryKey: ["expenses", range, cFrom, cTo],
+    queryKey: ["expenses", storeId, range, cFrom, cTo],
     queryFn: async () => {
       const { data, error } = await supabase.from("expenses")
         .select("id,category,amount,spent_on,payee,payment_mode,notes,created_at")
+        .eq("store_id", storeId)
         .gte("spent_on", start.toISOString().slice(0, 10))
         .lte("spent_on", end.toISOString().slice(0, 10))
         .order("spent_on", { ascending: false });
@@ -86,6 +88,7 @@ function ExpensesPage() {
     if (!amount || Number(amount) <= 0) return toast.error("Amount required");
     const { data: u } = await supabase.auth.getUser();
     const { error } = await supabase.from("expenses").insert({
+      store_id: storeId,
       category, amount: Number(amount), spent_on: date, payee: payee || null,
       payment_mode: mode, notes: notes || null, created_by: u.user!.id,
     });

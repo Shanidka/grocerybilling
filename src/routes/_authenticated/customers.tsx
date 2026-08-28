@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useStoreId } from "@/lib/active-store";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,11 +26,12 @@ function CustomersPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", notes: "" });
+  const storeId = useStoreId();
 
   const q = useQuery({
-    queryKey: ["customers"],
+    queryKey: ["customers", storeId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("customers").select("*").order("name");
+      const { data, error } = await supabase.from("customers").select("*").eq("store_id", storeId).order("name");
       if (error) throw error;
       return (data ?? []) as Customer[];
     },
@@ -45,7 +47,7 @@ function CustomersPage() {
   const openEdit = (c: Customer) => { setEditing(c); setForm({ name: c.name, phone: c.phone ?? "", email: c.email ?? "", notes: c.notes ?? "" }); setOpen(true); };
   const save = async () => {
     if (!form.name.trim()) return toast.error("Name required");
-    const payload = { name: form.name.trim(), phone: form.phone || null, email: form.email || null, notes: form.notes || null };
+    const payload = { name: form.name.trim(), phone: form.phone || null, email: form.email || null, notes: form.notes || null, store_id: storeId };
     const res = editing ? await supabase.from("customers").update(payload).eq("id", editing.id) : await supabase.from("customers").insert(payload);
     if (res.error) return toast.error(res.error.message);
     toast.success(editing ? "Updated" : "Added");
