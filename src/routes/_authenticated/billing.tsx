@@ -80,21 +80,22 @@ function Billing() {
 
   // Load products (cached for offline)
   const productsQ = useQuery({
-    queryKey: ["billing-products"],
+    queryKey: ["billing-products", storeId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
         .select("id,barcode,name,brand,selling_price,mrp,tax_pct,stock_qty,unit,is_active,sold_by,price_per_kg")
+        .eq("store_id", storeId)
         .eq("is_active", true)
         .order("name");
       if (error) throw error;
       const list = (data ?? []) as unknown as Product[];
-      try { localStorage.setItem("bz_products", JSON.stringify(list)); } catch { /* ignore */ }
+      try { localStorage.setItem(`bz_products_${storeId}`, JSON.stringify(list)); } catch { /* ignore */ }
       return list;
     },
     initialData: () => {
       try {
-        const raw = localStorage.getItem("bz_products");
+        const raw = localStorage.getItem(`bz_products_${storeId}`);
         return raw ? (JSON.parse(raw) as Product[]) : undefined;
       } catch { return undefined; }
     },
@@ -105,13 +106,14 @@ function Billing() {
 
   // Held bills (falls back to this device's local store when offline)
   const heldQ = useQuery({
-    queryKey: ["held-bills"],
+    queryKey: ["held-bills", storeId],
     queryFn: async () => {
       const local = readLocalHeld();
       try {
         const { data, error } = await supabase
           .from("held_bills")
           .select("id,label,cart,customer_name,customer_phone,bill_discount,created_at")
+          .eq("store_id", storeId)
           .order("created_at", { ascending: false });
         if (error) throw error;
         return [...local, ...(data ?? [])];
@@ -199,6 +201,7 @@ function Billing() {
     if (!uid) return;
     const label = customerName || `Bill ${new Date().toLocaleTimeString()}`;
     const { error } = await supabase.from("held_bills").insert({
+      store_id: storeId,
       cashier_id: uid,
       label,
       cart: cart as unknown as never,
@@ -521,6 +524,7 @@ function PaymentDialog({
   onCompleted: (billNo: string, phone: string, total: number) => void;
 }) {
   const { data: shop } = useShopSettings();
+  const storeId = useStoreId();
   const [mode, setMode] = useState("cash");
   const [paid, setPaid] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -585,6 +589,7 @@ function PaymentDialog({
           };
 
       const saleBase = {
+        store_id: storeId,
         cashier_id: uid,
         customer_name: customerName || null,
         customer_phone: customerPhone || null,
@@ -666,6 +671,24 @@ function PaymentDialog({
           gst_number: shop.gst_number, upi_id: shop.upi_id, receipt_footer: shop.receipt_footer,
         } : undefined,
       });
+
+      // Persist customer details to the directory (store-scoped, de-duped by phone)
+      if (!offline && (customerName.trim() || customerPhone.trim())) {
+        try {
+          const phone = customerPhone.trim();
+          const name = customerName.trim() || phone;
+          const existing = phone
+            ? await supabase.from("customers").select("id,name").eq("store_id", storeId).eq("phone", phone).maybeSingle()
+            : { data: null as { id: string; name: string } | null };
+          if (existing.data?.id) {
+            if (customerName.trim() && customerName.trim() !== existing.data.name) {
+              await supabase.from("customers").update({ name }).eq("id", existing.data.id);
+            }
+          } else {
+            await supabase.from("customers").insert({ store_id: storeId, name, phone: phone || null });
+          }
+        } catch { /* non-blocking */ }
+      }
 
       if (!offline) toast.success(`Bill ${bill_no} completed`);
       onCompleted(bill_no, customerPhone, totals.grand);
