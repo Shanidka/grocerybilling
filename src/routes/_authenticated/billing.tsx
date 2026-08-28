@@ -77,6 +77,7 @@ function Billing() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const storeId = useStoreId();
 
   // Load products (cached for offline)
   const productsQ = useQuery({
@@ -644,7 +645,7 @@ function PaymentDialog({
           client_uid: makeClientUid(),
           bill_no, created_at, ...saleBase, items: itemRows,
         });
-        adjustCachedStock(itemRows);
+        adjustCachedStock(itemRows, storeId);
         toast.warning(`Saved offline as ${bill_no} — will sync automatically`);
       }
 
