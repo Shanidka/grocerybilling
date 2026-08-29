@@ -765,6 +765,7 @@ function gstPeriodRange(kind: "month" | "quarter" | "year", value: string) {
 
 function GstExport() {
   const now = new Date();
+  const storeId = useStoreId();
   const [kind, setKind] = useState<"month" | "quarter" | "year">("month");
   const [value, setValue] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
   const [busy, setBusy] = useState(false);

@@ -8,6 +8,7 @@ import { useMyRoles } from "@/hooks/use-role";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useShopSettings } from "@/lib/shop-settings";
+import { useActiveStore } from "@/lib/active-store";
 
 
 const INACTIVITY_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -95,11 +96,12 @@ function AppShell() {
 
   // Low stock toast
   useQuery({
-    queryKey: ["low-stock-alert"],
+    queryKey: ["low-stock-alert", storeId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
         .select("id,name,stock_qty,min_qty")
+        .eq("store_id", storeId)
         .eq("is_active", true);
       if (error) throw error;
       const low = (data ?? []).filter((p) => Number(p.stock_qty) <= Number(p.min_qty) && Number(p.min_qty) > 0);
