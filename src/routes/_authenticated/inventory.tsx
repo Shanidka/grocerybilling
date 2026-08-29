@@ -415,6 +415,7 @@ function NewProductFromInvoice({ row, onClose, onCreated }: {
   const [scanOpen, setScanOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [seed, setSeed] = useState<PurchaseRow | null>(null);
+  const storeId = useStoreId();
 
   if (row && row !== seed) {
     setSeed(row);
