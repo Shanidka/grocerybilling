@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { useStoreId } from "@/lib/active-store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
@@ -33,12 +34,14 @@ function PurchaseOrdersPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [editing, setEditing] = useState<PO | null>(null);
   const [creating, setCreating] = useState(false);
+  const storeId = useStoreId();
 
   const list = useQuery({
-    queryKey: ["purchase-orders", statusFilter],
+    queryKey: ["purchase-orders", storeId, statusFilter],
     queryFn: async () => {
       let q = supabase.from("purchase_orders")
         .select("id,order_no,supplier_name,supplier_id,destination,status,notes,expected_at,printed_at,created_at,purchase_order_items(id,product_id,product_name,qty,unit,unit_cost,mrp,weight_g,notes)")
+        .eq("store_id", storeId)
         .order("created_at", { ascending: false }).limit(200);
       if (statusFilter !== "all") q = q.eq("status", statusFilter);
       const { data, error } = await q;
@@ -155,19 +158,20 @@ type Product = { id: string; name: string; unit: string; barcode: string | null;
 type Supplier = { id: string; name: string };
 
 function POEditor({ existing, onClose, onSaved }: { existing: PO | null; onClose: () => void; onSaved: () => void }) {
+  const storeId = useStoreId();
   const products = useQuery({
-    queryKey: ["po-products"],
+    queryKey: ["po-products", storeId],
     queryFn: async () => {
       const { data, error } = await supabase.from("products")
-        .select("id,name,unit,barcode,purchase_price,mrp,net_weight_g,brand").eq("is_active", true).order("name");
+        .select("id,name,unit,barcode,purchase_price,mrp,net_weight_g,brand").eq("store_id", storeId).eq("is_active", true).order("name");
       if (error) throw error;
       return (data ?? []) as Product[];
     },
   });
   const suppliers = useQuery({
-    queryKey: ["po-suppliers"],
+    queryKey: ["po-suppliers", storeId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("suppliers").select("id,name").order("name");
+      const { data, error } = await supabase.from("suppliers").select("id,name").eq("store_id", storeId).order("name");
       if (error) throw error;
       return (data ?? []) as Supplier[];
     },
@@ -217,6 +221,7 @@ function POEditor({ existing, onClose, onSaved }: { existing: PO | null; onClose
         expected_at: expectedAt || null,
         notes: notes || null,
         status,
+        store_id: storeId,
       };
 
       if (!poId) {

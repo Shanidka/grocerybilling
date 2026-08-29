@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { useStoreId } from "@/lib/active-store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -24,6 +25,9 @@ import { extractInvoice } from "@/lib/invoice-ocr.functions";
 
 export const Route = createFileRoute("/_authenticated/inventory")({
   ssr: false,
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: typeof search.tab === "string" ? search.tab : undefined,
+  }),
   component: InventoryPage,
   head: () => ({ meta: [{ title: "Inventory — Bazaar POS" }] }),
 });
@@ -40,6 +44,9 @@ const TABS: TabDef[] = [
 ];
 
 function InventoryPage() {
+  const { tab } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const active = TABS.some((t) => t.value === tab) ? (tab as string) : "stock";
   return (
     <div className="p-4 lg:p-6 space-y-6 max-w-7xl">
       <div>
@@ -47,7 +54,7 @@ function InventoryPage() {
         <p className="text-sm text-muted-foreground">Track stock, log purchases, adjustments, damages, and returns.</p>
       </div>
 
-      <Tabs defaultValue="stock" orientation="vertical" className="flex flex-col lg:flex-row gap-6">
+      <Tabs value={active} onValueChange={(v) => navigate({ search: { tab: v }, replace: true })} orientation="vertical" className="flex flex-col lg:flex-row gap-6">
         <TabsList className="h-auto bg-transparent p-0 flex flex-row lg:flex-col gap-2 lg:w-64 overflow-x-auto lg:overflow-visible shrink-0">
           {TABS.map((t) => {
             const Icon = t.icon;
@@ -83,12 +90,13 @@ function InventoryPage() {
 }
 
 function useProductsList() {
+  const storeId = useStoreId();
   return useQuery({
-    queryKey: ["inv-products"],
+    queryKey: ["inv-products", storeId],
     queryFn: async () => {
       const { data, error } = await supabase.from("products")
         .select("id,name,unit,barcode,brand,purchase_price,selling_price,mrp,stock_qty")
-        .eq("is_active", true).order("name");
+        .eq("store_id", storeId).eq("is_active", true).order("name");
       if (error) throw error;
       return data ?? [];
     },
@@ -96,10 +104,11 @@ function useProductsList() {
 }
 
 function useSuppliersList() {
+  const storeId = useStoreId();
   return useQuery({
-    queryKey: ["inv-suppliers"],
+    queryKey: ["inv-suppliers", storeId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("suppliers").select("id,name").order("name");
+      const { data, error } = await supabase.from("suppliers").select("id,name").eq("store_id", storeId).order("name");
       if (error) throw error;
       return data ?? [];
     },
@@ -110,12 +119,13 @@ function useSuppliersList() {
 function StockTab() {
   const [search, setSearch] = useState("");
   const [brand, setBrand] = useState("__all");
+  const storeId = useStoreId();
   const q = useQuery({
-    queryKey: ["inv-stock"],
+    queryKey: ["inv-stock", storeId],
     queryFn: async () => {
       const { data, error } = await supabase.from("products")
         .select("id,name,brand,unit,stock_qty,min_qty,max_qty,selling_price,updated_at")
-        .eq("is_active", true).order("name");
+        .eq("store_id", storeId).eq("is_active", true).order("name");
       if (error) throw error;
       return data ?? [];
     },
@@ -180,10 +190,11 @@ function PurchasesTab() {
   const qc = useQueryClient();
   const { data: products } = useProductsList();
   const { data: suppliersList } = useSuppliersList();
+  const storeId = useStoreId();
   const q = useQuery({
-    queryKey: ["inv-purchases"],
+    queryKey: ["inv-purchases", storeId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("purchase_entries").select("id,supplier,invoice_no,total,created_at,purchase_items(id,name,qty,cost)").order("created_at", { ascending: false }).limit(50);
+      const { data, error } = await supabase.from("purchase_entries").select("id,supplier,invoice_no,total,created_at,purchase_items(id,name,qty,cost)").eq("store_id", storeId).order("created_at", { ascending: false }).limit(50);
       if (error) throw error;
       return data ?? [];
     },
@@ -250,7 +261,7 @@ function PurchasesTab() {
     const rows = items.filter((i) => i.product_id && Number(i.qty) > 0);
     if (rows.length === 0) return toast.error("Add at least one item (or save unmatched lines as products first)");
     const { data: userData } = await supabase.auth.getUser();
-    const { data: entry, error } = await supabase.from("purchase_entries").insert({ supplier, invoice_no: invoice, total, created_by: userData.user!.id }).select().single();
+    const { data: entry, error } = await supabase.from("purchase_entries").insert({ store_id: storeId, supplier, invoice_no: invoice, total, created_by: userData.user!.id }).select().single();
     if (error) return toast.error(error.message);
     const { error: e2 } = await supabase.from("purchase_items").insert(
       rows.map((r) => ({
@@ -265,7 +276,7 @@ function PurchasesTab() {
 
     // Keep supplier directory in sync
     if (supplier.trim() && !suppliersList?.some((s) => s.name.toLowerCase() === supplier.trim().toLowerCase())) {
-      await supabase.from("suppliers").insert({ name: supplier.trim() });
+      await supabase.from("suppliers").insert({ name: supplier.trim(), store_id: storeId });
       qc.invalidateQueries({ queryKey: ["inv-suppliers"] });
       qc.invalidateQueries({ queryKey: ["suppliers"] });
     }
@@ -410,6 +421,7 @@ function NewProductFromInvoice({ row, onClose, onCreated }: {
   const [scanOpen, setScanOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [seed, setSeed] = useState<PurchaseRow | null>(null);
+  const storeId = useStoreId();
 
   if (row && row !== seed) {
     setSeed(row);
@@ -425,6 +437,7 @@ function NewProductFromInvoice({ row, onClose, onCreated }: {
       const sell = Number(selling) || Number(mrp) || 0;
       const margin = purchase > 0 ? ((sell - purchase) / purchase) * 100 : 0;
       const { data, error } = await supabase.from("products").insert({
+        store_id: storeId,
         name: name.trim(),
         brand: brand.trim() || null,
         barcode: barcode.trim() || null,
@@ -733,11 +746,12 @@ function BelowMinTab() {
   const [showDraft, setShowDraft] = useState(false);
   const [supplierName, setSupplierName] = useState("");
 
+  const storeId = useStoreId();
   const q = useQuery({
-    queryKey: ["inv-belowmin"],
+    queryKey: ["inv-belowmin", storeId],
     queryFn: async () => {
       const { data, error } = await supabase.from("products")
-        .select("id,name,brand,unit,stock_qty,min_qty,max_qty,purchase_price,mrp,net_weight_g").eq("is_active", true);
+        .select("id,name,brand,unit,stock_qty,min_qty,max_qty,purchase_price,mrp,net_weight_g").eq("store_id", storeId).eq("is_active", true);
       if (error) throw error;
       return (data ?? []).filter((p) => Number(p.stock_qty) <= Number(p.min_qty) && Number(p.min_qty) > 0);
     },
@@ -789,7 +803,7 @@ function BelowMinTab() {
     const order_no = `PO-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`;
     const supplier = supplierName || (brand !== "__all" ? brand : "");
     const { data: po, error } = await supabase.from("purchase_orders")
-      .insert({ order_no, supplier_name: supplier, status: "draft", created_by: u.user!.id })
+      .insert({ order_no, supplier_name: supplier, status: "draft", created_by: u.user!.id, store_id: storeId })
       .select().single();
     if (error) return toast.error(error.message);
     const { error: e2 } = await supabase.from("purchase_order_items").insert(
@@ -940,12 +954,13 @@ function AddToOrderButton({ defaultQty, unit, onAdd }: { defaultQty: number; uni
 /* Expiring soon */
 function ExpiringTab() {
   const [days, setDays] = useState("30");
+  const storeId = useStoreId();
   const q = useQuery({
-    queryKey: ["inv-expiring", days],
+    queryKey: ["inv-expiring", storeId, days],
     queryFn: async () => {
       const until = new Date(); until.setDate(until.getDate() + Number(days || 30));
       const { data, error } = await supabase.from("products")
-        .select("id,name,brand,unit,stock_qty,expiry_date").eq("is_active", true)
+        .select("id,name,brand,unit,stock_qty,expiry_date").eq("store_id", storeId).eq("is_active", true)
         .not("expiry_date", "is", null).lte("expiry_date", until.toISOString().slice(0, 10))
         .order("expiry_date");
       if (error) throw error;

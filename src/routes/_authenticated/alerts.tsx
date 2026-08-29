@@ -1,5 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { useStoreId } from "@/lib/active-store";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
@@ -18,12 +19,14 @@ export const Route = createFileRoute("/_authenticated/alerts")({
 type ExpiryBucket = "expired" | "7d" | "30d" | "90d" | "all";
 
 function AlertsPage() {
+  const storeId = useStoreId();
   const q = useQuery({
-    queryKey: ["alerts-products"],
+    queryKey: ["alerts-products", storeId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
         .select("id,name,brand,stock_qty,min_qty,max_qty,expiry_date,last_sold_at,selling_price,unit")
+        .eq("store_id", storeId)
         .eq("is_active", true);
       if (error) throw error;
       return data ?? [];
@@ -62,9 +65,9 @@ function AlertsPage() {
       </div>
 
       <div className="grid sm:grid-cols-3 gap-4">
-        <StatCard icon={AlertTriangle} label="Low stock" count={low.length} tone="warning" />
-        <StatCard icon={CalendarClock} label="Expiring ≤ 30 days" count={products.filter(p => p.expiry_date && (new Date(p.expiry_date).getTime() - today.getTime())/86400000 <= 30 && (new Date(p.expiry_date).getTime() - today.getTime())/86400000 >= 0).length} tone="warning" />
-        <StatCard icon={PackageX} label="Dead stock (60d)" count={deadStock.length} tone="danger" />
+        <Link to="/inventory" search={{ tab: "belowmin" }}><StatCard icon={AlertTriangle} label="Low stock" count={low.length} tone="warning" /></Link>
+        <Link to="/inventory" search={{ tab: "expiring" }}><StatCard icon={CalendarClock} label="Expiring ≤ 30 days" count={products.filter(p => p.expiry_date && (new Date(p.expiry_date).getTime() - today.getTime())/86400000 <= 30 && (new Date(p.expiry_date).getTime() - today.getTime())/86400000 >= 0).length} tone="warning" /></Link>
+        <Link to="/inventory" search={{ tab: "stock" }}><StatCard icon={PackageX} label="Dead stock (60d)" count={deadStock.length} tone="danger" /></Link>
       </div>
 
       <Tabs defaultValue="low">
@@ -139,7 +142,7 @@ function AlertsPage() {
 function StatCard({ icon: Icon, label, count, tone }: { icon: React.ComponentType<{ className?: string }>; label: string; count: number; tone: "warning" | "danger" }) {
   const bg = tone === "danger" ? "bg-destructive/10 text-destructive" : "bg-warning/15 text-warning";
   return (
-    <Card className="p-5">
+    <Card className="p-5 h-full transition-shadow hover:shadow-md">
       <div className={`size-10 rounded-xl grid place-items-center ${bg}`}><Icon className="size-5" /></div>
       <div className="mt-4 text-3xl font-semibold tracking-tight">{count}</div>
       <div className="text-sm text-muted-foreground">{label}</div>

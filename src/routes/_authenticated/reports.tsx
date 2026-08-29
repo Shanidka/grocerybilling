@@ -1,5 +1,6 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { useStoreId } from "@/lib/active-store";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
@@ -113,11 +114,13 @@ function Kpi({ label, value, sub, tone, accent }: { label: string; value: string
 type SaleRow = { id: string; bill_no: string; grand_total: number | string; tax_total: number | string; line_discount: number | string; bill_discount: number | string; payment_mode: string; customer_name: string | null; customer_phone: string | null; created_at: string; sale_items: Array<{ qty: number | string; line_total: number | string; name: string; product_id: string | null; cost_at_sale?: number | string }> };
 
 function useSales(start: Date, end: Date) {
+  const storeId = useStoreId();
   return useQuery({
-    queryKey: ["reports-sales", start.toISOString(), end.toISOString()],
+    queryKey: ["reports-sales", storeId, start.toISOString(), end.toISOString()],
     queryFn: async (): Promise<SaleRow[]> => {
       const { data, error } = await supabase.from("sales")
         .select("id,bill_no,grand_total,tax_total,line_discount,bill_discount,payment_mode,customer_name,customer_phone,created_at,sale_items(qty,line_total,name,product_id,cost_at_sale)")
+        .eq("store_id", storeId)
         .gte("created_at", start.toISOString()).lte("created_at", end.toISOString())
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -358,12 +361,14 @@ function MoneyOutTab() {
   const [preset, setPreset] = useState<Preset>("30d");
   const [from, setFrom] = useState(""); const [to, setTo] = useState("");
   const { start, end } = rangeFor(preset, from, to);
+  const storeId = useStoreId();
 
   const expenses = useQuery({
-    queryKey: ["reports-exp", start.toISOString(), end.toISOString()],
+    queryKey: ["reports-exp", storeId, start.toISOString(), end.toISOString()],
     queryFn: async () => {
       const { data, error } = await supabase.from("expenses")
         .select("category,amount,spent_on")
+        .eq("store_id", storeId)
         .gte("spent_on", start.toISOString().slice(0, 10))
         .lte("spent_on", end.toISOString().slice(0, 10));
       if (error) throw error;
@@ -371,10 +376,11 @@ function MoneyOutTab() {
     },
   });
   const purchases = useQuery({
-    queryKey: ["reports-pur", start.toISOString(), end.toISOString()],
+    queryKey: ["reports-pur", storeId, start.toISOString(), end.toISOString()],
     queryFn: async () => {
       const { data, error } = await supabase.from("purchase_entries")
         .select("total,created_at")
+        .eq("store_id", storeId)
         .gte("created_at", start.toISOString()).lte("created_at", end.toISOString());
       if (error) throw error;
       return data ?? [];
@@ -440,19 +446,21 @@ function ProfitTab() {
   const sales = useSales(start, end);
   const bills = sales.data ?? [];
 
+  const storeId = useStoreId();
   const products = useQuery({
-    queryKey: ["reports-product-costs"],
+    queryKey: ["reports-product-costs", storeId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("products").select("id,purchase_price");
+      const { data, error } = await supabase.from("products").select("id,purchase_price").eq("store_id", storeId);
       if (error) throw error;
       return new Map((data ?? []).map((p) => [p.id, Number(p.purchase_price)]));
     },
   });
 
   const expenses = useQuery({
-    queryKey: ["reports-exp-p", start.toISOString(), end.toISOString()],
+    queryKey: ["reports-exp-p", storeId, start.toISOString(), end.toISOString()],
     queryFn: async () => {
       const { data, error } = await supabase.from("expenses").select("amount")
+        .eq("store_id", storeId)
         .gte("spent_on", start.toISOString().slice(0, 10))
         .lte("spent_on", end.toISOString().slice(0, 10));
       if (error) throw error;
@@ -514,10 +522,11 @@ function ProductProfitTab() {
   const [sortKey, setSortKey] = useState<"profit" | "profit_asc" | "revenue" | "qty" | "qty_asc">("profit");
   const { start, end } = rangeFor(preset, from, to);
   const sales = useSales(start, end);
+  const storeId = useStoreId();
   const products = useQuery({
-    queryKey: ["reports-products-full"],
+    queryKey: ["reports-products-full", storeId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("products").select("id,name,purchase_price,selling_price,mrp,stock_qty,unit,brand");
+      const { data, error } = await supabase.from("products").select("id,name,purchase_price,selling_price,mrp,stock_qty,unit,brand").eq("store_id", storeId);
       if (error) throw error;
       return data ?? [];
     },
@@ -675,13 +684,14 @@ function TopSellingTab() {
 /* ============ SLOW MOVING ============ */
 function SlowMovingTab() {
   const [days, setDays] = useState("30");
+  const storeId = useStoreId();
   const q = useQuery({
-    queryKey: ["reports-slow", days],
+    queryKey: ["reports-slow", storeId, days],
     queryFn: async () => {
       const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - Number(days));
       const { data, error } = await supabase.from("products")
         .select("id,name,brand,unit,stock_qty,purchase_price,last_sold_at,updated_at")
-        .eq("is_active", true).gt("stock_qty", 0);
+        .eq("store_id", storeId).eq("is_active", true).gt("stock_qty", 0);
       if (error) throw error;
       return (data ?? []).filter((p) => !p.last_sold_at || new Date(p.last_sold_at) < cutoff)
         .sort((a, b) => Number(b.stock_qty) * Number(b.purchase_price) - Number(a.stock_qty) * Number(a.purchase_price));
@@ -755,6 +765,7 @@ function gstPeriodRange(kind: "month" | "quarter" | "year", value: string) {
 
 function GstExport() {
   const now = new Date();
+  const storeId = useStoreId();
   const [kind, setKind] = useState<"month" | "quarter" | "year">("month");
   const [value, setValue] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
   const [busy, setBusy] = useState(false);
@@ -783,6 +794,7 @@ function GstExport() {
       const { start, end } = gstPeriodRange(kind, value);
       const { data, error } = await supabase.from("sales")
         .select("id,bill_no,grand_total,tax_total,line_discount,bill_discount,payment_mode,customer_name,customer_phone,created_at,sale_items(qty,line_total,name,product_id,cost_at_sale)")
+        .eq("store_id", storeId)
         .gte("created_at", start.toISOString()).lte("created_at", end.toISOString())
         .order("created_at");
       if (error) throw error;

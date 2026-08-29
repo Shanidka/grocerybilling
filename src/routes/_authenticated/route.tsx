@@ -1,13 +1,14 @@
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff, Package, Settings as SettingsIcon, AlertTriangle, BarChart3, Boxes, Users, Truck, UserCog, ClipboardList, Wallet } from "lucide-react";
+import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff, Package, Settings as SettingsIcon, AlertTriangle, BarChart3, Boxes, Users, Truck, UserCog, ClipboardList, Wallet, FileText, Store, Check, ChevronsUpDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useMyRoles } from "@/hooks/use-role";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useShopSettings } from "@/lib/shop-settings";
+import { useActiveStore } from "@/lib/active-store";
 
 
 const INACTIVITY_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -42,6 +43,7 @@ const NAV: NavGroup[] = [
   { group: "Overview", items: [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/alerts", label: "Alerts", icon: AlertTriangle },
+    { to: "/documents", label: "Documents", icon: FileText },
   ] },
   { group: "Sales", items: [
     { to: "/billing", label: "Billing", icon: ScanBarcode },
@@ -71,6 +73,8 @@ function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: roles } = useMyRoles();
   const { data: shop } = useShopSettings();
+  const { storeId, store, stores, setStoreId } = useActiveStore();
+  const [storePickerOpen, setStorePickerOpen] = useState(false);
 
   const [open, setOpen] = useState(false);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
@@ -95,11 +99,12 @@ function AppShell() {
 
   // Low stock toast
   useQuery({
-    queryKey: ["low-stock-alert"],
+    queryKey: ["low-stock-alert", storeId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
         .select("id,name,stock_qty,min_qty")
+        .eq("store_id", storeId)
         .eq("is_active", true);
       if (error) throw error;
       const low = (data ?? []).filter((p) => Number(p.stock_qty) <= Number(p.min_qty) && Number(p.min_qty) > 0);
@@ -108,6 +113,10 @@ function AppShell() {
           id: "low-stock",
           description: low.slice(0, 3).map((p) => p.name).join(", ") + (low.length > 3 ? "…" : ""),
           duration: 6000,
+          action: {
+            label: "View",
+            onClick: () => router.navigate({ to: "/inventory", search: { tab: "belowmin" } }),
+          },
         });
       }
       return low;
@@ -138,8 +147,39 @@ function AppShell() {
             </div>
           </div>
           <div className="mt-3 ml-3 pl-3 border-l border-sidebar-border">
-            <div className="text-[10px] uppercase tracking-wider text-sidebar-foreground/50">Branch</div>
-            <div className="text-sm text-sidebar-foreground/90">Main branch</div>
+            <div className="text-[10px] uppercase tracking-wider text-sidebar-foreground/50">Branch / store</div>
+            <button
+              type="button"
+              onClick={() => setStorePickerOpen((v) => !v)}
+              className="mt-1 w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm bg-sidebar-accent/40 hover:bg-sidebar-accent text-sidebar-foreground"
+            >
+              <Store className="size-3.5 shrink-0" />
+              <span className="truncate flex-1 text-left">{store?.name ?? "Select store"}</span>
+              <ChevronsUpDown className="size-3.5 opacity-60" />
+            </button>
+            {storePickerOpen && (
+              <div className="mt-1 rounded-md border border-sidebar-border bg-sidebar overflow-hidden">
+                {stores.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => { setStoreId(s.id); setStorePickerOpen(false); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-sidebar-accent text-left"
+                  >
+                    <Check className={`size-3.5 ${s.id === storeId ? "opacity-100" : "opacity-0"}`} />
+                    <span className="truncate flex-1">{s.name}</span>
+                    <span className="text-[10px] uppercase text-sidebar-foreground/50">{s.kind}</span>
+                  </button>
+                ))}
+                <Link
+                  to="/settings"
+                  onClick={() => { setStorePickerOpen(false); setOpen(false); }}
+                  className="block px-2 py-1.5 text-xs text-sidebar-foreground/70 hover:bg-sidebar-accent border-t border-sidebar-border"
+                >
+                  Manage stores…
+                </Link>
+              </div>
+            )}
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
