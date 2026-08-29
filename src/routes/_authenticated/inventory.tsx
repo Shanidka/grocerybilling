@@ -25,6 +25,9 @@ import { extractInvoice } from "@/lib/invoice-ocr.functions";
 
 export const Route = createFileRoute("/_authenticated/inventory")({
   ssr: false,
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: typeof search.tab === "string" ? search.tab : undefined,
+  }),
   component: InventoryPage,
   head: () => ({ meta: [{ title: "Inventory — Bazaar POS" }] }),
 });
@@ -41,6 +44,9 @@ const TABS: TabDef[] = [
 ];
 
 function InventoryPage() {
+  const { tab } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const active = TABS.some((t) => t.value === tab) ? (tab as string) : "stock";
   return (
     <div className="p-4 lg:p-6 space-y-6 max-w-7xl">
       <div>
@@ -48,7 +54,7 @@ function InventoryPage() {
         <p className="text-sm text-muted-foreground">Track stock, log purchases, adjustments, damages, and returns.</p>
       </div>
 
-      <Tabs defaultValue="stock" orientation="vertical" className="flex flex-col lg:flex-row gap-6">
+      <Tabs value={active} onValueChange={(v) => navigate({ search: { tab: v }, replace: true })} orientation="vertical" className="flex flex-col lg:flex-row gap-6">
         <TabsList className="h-auto bg-transparent p-0 flex flex-row lg:flex-col gap-2 lg:w-64 overflow-x-auto lg:overflow-visible shrink-0">
           {TABS.map((t) => {
             const Icon = t.icon;
