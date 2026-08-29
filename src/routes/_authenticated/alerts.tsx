@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { useStoreId } from "@/lib/active-store";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
@@ -18,12 +19,14 @@ export const Route = createFileRoute("/_authenticated/alerts")({
 type ExpiryBucket = "expired" | "7d" | "30d" | "90d" | "all";
 
 function AlertsPage() {
+  const storeId = useStoreId();
   const q = useQuery({
-    queryKey: ["alerts-products"],
+    queryKey: ["alerts-products", storeId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
         .select("id,name,brand,stock_qty,min_qty,max_qty,expiry_date,last_sold_at,selling_price,unit")
+        .eq("store_id", storeId)
         .eq("is_active", true);
       if (error) throw error;
       return data ?? [];

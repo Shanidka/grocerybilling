@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { useStoreId } from "@/lib/active-store";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
@@ -17,34 +18,35 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 
 function Dashboard() {
   const { data: roles } = useMyRoles();
+  const storeId = useStoreId();
   const showCharts = canManage(roles);
   const start = new Date(); start.setHours(0, 0, 0, 0);
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
   const trendStart = new Date(); trendStart.setDate(trendStart.getDate() - 29); trendStart.setHours(0, 0, 0, 0);
 
   const today = useQuery({
-    queryKey: ["dash-today"],
+    queryKey: ["dash-today", storeId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("sales").select("grand_total").gte("created_at", start.toISOString());
+      const { data, error } = await supabase.from("sales").select("grand_total").eq("store_id", storeId).gte("created_at", start.toISOString());
       if (error) throw error;
       return { total: (data ?? []).reduce((s, r) => s + Number(r.grand_total), 0), count: data?.length ?? 0 };
     },
   });
 
   const month = useQuery({
-    queryKey: ["dash-month"],
+    queryKey: ["dash-month", storeId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("sales").select("grand_total").gte("created_at", monthStart.toISOString());
+      const { data, error } = await supabase.from("sales").select("grand_total").eq("store_id", storeId).gte("created_at", monthStart.toISOString());
       if (error) throw error;
       return { total: (data ?? []).reduce((s, r) => s + Number(r.grand_total), 0), count: data?.length ?? 0 };
     },
   });
 
   const moneyOut = useQuery({
-    queryKey: ["dash-moneyout"],
+    queryKey: ["dash-moneyout", storeId],
     queryFn: async () => {
       const [pur, dam, ret] = await Promise.all([
-        supabase.from("purchase_entries").select("total").gte("created_at", start.toISOString()),
+        supabase.from("purchase_entries").select("total").eq("store_id", storeId).gte("created_at", start.toISOString()),
         supabase.from("damaged_products").select("loss_value").gte("created_at", start.toISOString()),
         supabase.from("product_returns").select("refund_amount").gte("created_at", start.toISOString()),
       ]);
@@ -56,9 +58,9 @@ function Dashboard() {
   });
 
   const lowStockCount = useQuery({
-    queryKey: ["dash-low-count"],
+    queryKey: ["dash-low-count", storeId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("products").select("stock_qty,min_qty").eq("is_active", true);
+      const { data, error } = await supabase.from("products").select("stock_qty,min_qty").eq("store_id", storeId).eq("is_active", true);
       if (error) throw error;
       return (data ?? []).filter((p) => Number(p.stock_qty) <= Number(p.min_qty) && Number(p.min_qty) > 0).length;
     },
@@ -67,10 +69,11 @@ function Dashboard() {
 
   const trend = useQuery({
     enabled: showCharts,
-    queryKey: ["dash-trend-30d"],
+    queryKey: ["dash-trend-30d", storeId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sales").select("grand_total,created_at,sale_items(name,qty,line_total)")
+        .eq("store_id", storeId)
         .gte("created_at", trendStart.toISOString());
       if (error) throw error;
       return data ?? [];
