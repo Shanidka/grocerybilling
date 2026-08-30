@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Settings as SettingsIcon, Save, Loader2, Store, Plus, Copy } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
 import { useActiveStore, type Store as StoreRow } from "@/lib/active-store";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
