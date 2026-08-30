@@ -120,7 +120,7 @@ function Dashboard() {
             <Link to="/alerts"><AlertTriangle className="size-4" /> Alerts{lowStockCount.data ? ` (${lowStockCount.data})` : ""}</Link>
           </Button>
           <Button asChild variant="outline" className="h-11">
-            <Link to="/inventory"><Boxes className="size-4" /> Inventory</Link>
+            <Link to="/inventory" search={{}}><Boxes className="size-4" /> Inventory</Link>
           </Button>
           <Button asChild size="lg" className="h-11">
             <Link to="/billing"><ScanBarcode className="size-4" /> New bill</Link>

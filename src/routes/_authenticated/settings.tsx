@@ -118,8 +118,9 @@ function StoresCard() {
           .select("*").eq("store_id", copyFrom).eq("is_active", true);
         if (e2) throw e2;
         const rows = (src ?? []).map((p) => {
-          const { id: _id, created_at: _c, updated_at: _u, last_sold_at: _l, ...rest } = p as Record<string, unknown> as never;
-          return { ...(rest as object), store_id: data.id, stock_qty: 0 };
+          const rest = { ...(p as Record<string, unknown>) };
+          delete rest.id; delete rest.created_at; delete rest.updated_at; delete rest.last_sold_at;
+          return { ...rest, store_id: data.id, stock_qty: 0 };
         });
         if (rows.length) {
           const { error: e3 } = await supabase.from("products").insert(rows as never);
