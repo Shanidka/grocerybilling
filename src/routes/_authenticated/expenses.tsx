@@ -34,6 +34,7 @@ function ExpensesPage() {
   if (!isLoading && !canManage(roles)) return <Navigate to="/dashboard" />;
 
   const qc = useQueryClient();
+  const storeId = useStoreId();
   const [range, setRange] = useState<"7d" | "30d" | "mtd" | "ytd" | "custom">("30d");
   const [cFrom, setCFrom] = useState("");
   const [cTo, setCTo] = useState("");

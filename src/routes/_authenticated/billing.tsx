@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { inr } from "@/lib/format";
 import { generateReceipt } from "@/lib/receipt";
 import { useShopSettings, parseScaleBarcode } from "@/lib/shop-settings";
+import { useStoreId, useActiveStore } from "@/lib/active-store";
 import { makeClientUid, makeOfflineBillNo, queueSale, adjustCachedStock, syncOfflineSales, pendingCount } from "@/lib/offline-sales";
 import QRCode from "qrcode";
 
@@ -524,8 +525,19 @@ function PaymentDialog({
   cart: CartLine[]; customerName: string; customerPhone: string;
   onCompleted: (billNo: string, phone: string, total: number) => void;
 }) {
-  const { data: shop } = useShopSettings();
-  const storeId = useStoreId();
+  const { data: shopBase } = useShopSettings();
+  const { storeId, store } = useActiveStore();
+  // Store-level identity overrides the organization defaults on receipts and UPI QR
+  const shop = shopBase || store
+    ? {
+        shop_name: store?.name || shopBase?.shop_name || "",
+        phone: store?.phone ?? shopBase?.phone ?? null,
+        address: store?.address ?? shopBase?.address ?? null,
+        gst_number: store?.gst_number ?? shopBase?.gst_number ?? null,
+        upi_id: store?.upi_id || shopBase?.upi_id || null,
+        receipt_footer: shopBase?.receipt_footer ?? null,
+      }
+    : null;
   const [mode, setMode] = useState("cash");
   const [paid, setPaid] = useState<string>("");
   const [loading, setLoading] = useState(false);

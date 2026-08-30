@@ -25,9 +25,8 @@ import { extractInvoice } from "@/lib/invoice-ocr.functions";
 
 export const Route = createFileRoute("/_authenticated/inventory")({
   ssr: false,
-  validateSearch: (search: Record<string, unknown>) => ({
-    tab: typeof search.tab === "string" ? search.tab : undefined,
-  }),
+  validateSearch: (search: Record<string, unknown>): { tab?: string } =>
+    typeof search.tab === "string" ? { tab: search.tab } : {},
   component: InventoryPage,
   head: () => ({ meta: [{ title: "Inventory — Bazaar POS" }] }),
 });
