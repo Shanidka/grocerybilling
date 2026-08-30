@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { inr } from "@/lib/format";
 import { generateReceipt } from "@/lib/receipt";
 import { useShopSettings, parseScaleBarcode } from "@/lib/shop-settings";
+import { useStoreId, useActiveStore } from "@/lib/active-store";
 import { makeClientUid, makeOfflineBillNo, queueSale, adjustCachedStock, syncOfflineSales, pendingCount } from "@/lib/offline-sales";
 import QRCode from "qrcode";
 
