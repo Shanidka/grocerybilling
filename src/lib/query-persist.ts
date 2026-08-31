@@ -15,7 +15,7 @@ export function setupQueryPersistence(queryClient: QueryClient) {
       throttleTime: 1000,
     });
     persistQueryClient({
-      queryClient,
+      queryClient: queryClient as never,
       persister,
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       dehydrateOptions: {
