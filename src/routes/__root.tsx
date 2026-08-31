@@ -123,7 +123,12 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
+    import("../lib/query-persist").then(({ setupQueryPersistence }) => setupQueryPersistence(queryClient));
+  }, [queryClient]);
+
+  useEffect(() => {
     let unsub: (() => void) | undefined;
+
     import("../integrations/supabase/client").then(({ supabase }) => {
       const sub = supabase.auth.onAuthStateChange((event) => {
         if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
