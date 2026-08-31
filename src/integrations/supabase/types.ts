@@ -111,6 +111,68 @@ export type Database = {
           },
         ]
       }
+      devices: {
+        Row: {
+          bluetooth_id: string | null
+          connection: string
+          created_at: string
+          created_by: string | null
+          id: string
+          ip_address: string | null
+          is_active: boolean
+          is_default: boolean
+          kind: string
+          name: string
+          notes: string | null
+          paper_width: number
+          port: number | null
+          store_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          bluetooth_id?: string | null
+          connection?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean
+          is_default?: boolean
+          kind?: string
+          name: string
+          notes?: string | null
+          paper_width?: number
+          port?: number | null
+          store_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bluetooth_id?: string | null
+          connection?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean
+          is_default?: boolean
+          kind?: string
+          name?: string
+          notes?: string | null
+          paper_width?: number
+          port?: number | null
+          store_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "devices_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expenses: {
         Row: {
           amount: number
