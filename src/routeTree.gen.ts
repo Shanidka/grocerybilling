@@ -14,8 +14,10 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedAlertsRouteImport } from './routes/_authenticated/alerts'
 import { Route as AuthenticatedBillingRouteImport } from './routes/_authenticated/billing'
+import { Route as AuthenticatedCreditRouteImport } from './routes/_authenticated/credit'
 import { Route as AuthenticatedCustomersRouteImport } from './routes/_authenticated/customers'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedDayBookRouteImport } from './routes/_authenticated/day-book'
 import { Route as AuthenticatedDevicesRouteImport } from './routes/_authenticated/devices'
 import { Route as AuthenticatedDocumentsRouteImport } from './routes/_authenticated/documents'
 import { Route as AuthenticatedExpensesRouteImport } from './routes/_authenticated/expenses'
@@ -26,6 +28,7 @@ import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedStaffRouteImport } from './routes/_authenticated/staff'
 import { Route as AuthenticatedSuppliersRouteImport } from './routes/_authenticated/suppliers'
+import { Route as AuthenticatedTrendsRouteImport } from './routes/_authenticated/trends'
 import { Route as IBillNoRouteImport } from './routes/i.$billNo'
 
 const IndexRoute = IndexRouteImport.update({
@@ -52,6 +55,11 @@ const AuthenticatedBillingRoute = AuthenticatedBillingRouteImport.update({
   path: '/billing',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCreditRoute = AuthenticatedCreditRouteImport.update({
+  id: '/credit',
+  path: '/credit',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedCustomersRoute = AuthenticatedCustomersRouteImport.update({
   id: '/customers',
   path: '/customers',
@@ -60,6 +68,11 @@ const AuthenticatedCustomersRoute = AuthenticatedCustomersRouteImport.update({
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedDayBookRoute = AuthenticatedDayBookRouteImport.update({
+  id: '/day-book',
+  path: '/day-book',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedDevicesRoute = AuthenticatedDevicesRouteImport.update({
@@ -113,6 +126,11 @@ const AuthenticatedSuppliersRoute = AuthenticatedSuppliersRouteImport.update({
   path: '/suppliers',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedTrendsRoute = AuthenticatedTrendsRouteImport.update({
+  id: '/trends',
+  path: '/trends',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const IBillNoRoute = IBillNoRouteImport.update({
   id: '/i/$billNo',
   path: '/i/$billNo',
@@ -124,8 +142,10 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/alerts': typeof AuthenticatedAlertsRoute
   '/billing': typeof AuthenticatedBillingRoute
+  '/credit': typeof AuthenticatedCreditRoute
   '/customers': typeof AuthenticatedCustomersRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/day-book': typeof AuthenticatedDayBookRoute
   '/devices': typeof AuthenticatedDevicesRoute
   '/documents': typeof AuthenticatedDocumentsRoute
   '/expenses': typeof AuthenticatedExpensesRoute
@@ -136,6 +156,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/staff': typeof AuthenticatedStaffRoute
   '/suppliers': typeof AuthenticatedSuppliersRoute
+  '/trends': typeof AuthenticatedTrendsRoute
   '/i/$billNo': typeof IBillNoRoute
 }
 export interface FileRoutesByTo {
@@ -143,8 +164,10 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/alerts': typeof AuthenticatedAlertsRoute
   '/billing': typeof AuthenticatedBillingRoute
+  '/credit': typeof AuthenticatedCreditRoute
   '/customers': typeof AuthenticatedCustomersRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/day-book': typeof AuthenticatedDayBookRoute
   '/devices': typeof AuthenticatedDevicesRoute
   '/documents': typeof AuthenticatedDocumentsRoute
   '/expenses': typeof AuthenticatedExpensesRoute
@@ -155,6 +178,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/staff': typeof AuthenticatedStaffRoute
   '/suppliers': typeof AuthenticatedSuppliersRoute
+  '/trends': typeof AuthenticatedTrendsRoute
   '/i/$billNo': typeof IBillNoRoute
 }
 export interface FileRoutesById {
@@ -164,8 +188,10 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/alerts': typeof AuthenticatedAlertsRoute
   '/_authenticated/billing': typeof AuthenticatedBillingRoute
+  '/_authenticated/credit': typeof AuthenticatedCreditRoute
   '/_authenticated/customers': typeof AuthenticatedCustomersRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/day-book': typeof AuthenticatedDayBookRoute
   '/_authenticated/devices': typeof AuthenticatedDevicesRoute
   '/_authenticated/documents': typeof AuthenticatedDocumentsRoute
   '/_authenticated/expenses': typeof AuthenticatedExpensesRoute
@@ -176,6 +202,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/staff': typeof AuthenticatedStaffRoute
   '/_authenticated/suppliers': typeof AuthenticatedSuppliersRoute
+  '/_authenticated/trends': typeof AuthenticatedTrendsRoute
   '/i/$billNo': typeof IBillNoRoute
 }
 export interface FileRouteTypes {
@@ -185,8 +212,10 @@ export interface FileRouteTypes {
     | '/auth'
     | '/alerts'
     | '/billing'
+    | '/credit'
     | '/customers'
     | '/dashboard'
+    | '/day-book'
     | '/devices'
     | '/documents'
     | '/expenses'
@@ -197,6 +226,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/staff'
     | '/suppliers'
+    | '/trends'
     | '/i/$billNo'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -204,8 +234,10 @@ export interface FileRouteTypes {
     | '/auth'
     | '/alerts'
     | '/billing'
+    | '/credit'
     | '/customers'
     | '/dashboard'
+    | '/day-book'
     | '/devices'
     | '/documents'
     | '/expenses'
@@ -216,6 +248,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/staff'
     | '/suppliers'
+    | '/trends'
     | '/i/$billNo'
   id:
     | '__root__'
@@ -224,8 +257,10 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/alerts'
     | '/_authenticated/billing'
+    | '/_authenticated/credit'
     | '/_authenticated/customers'
     | '/_authenticated/dashboard'
+    | '/_authenticated/day-book'
     | '/_authenticated/devices'
     | '/_authenticated/documents'
     | '/_authenticated/expenses'
@@ -236,6 +271,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/staff'
     | '/_authenticated/suppliers'
+    | '/_authenticated/trends'
     | '/i/$billNo'
   fileRoutesById: FileRoutesById
 }
@@ -283,6 +319,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBillingRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/credit': {
+      id: '/_authenticated/credit'
+      path: '/credit'
+      fullPath: '/credit'
+      preLoaderRoute: typeof AuthenticatedCreditRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/customers': {
       id: '/_authenticated/customers'
       path: '/customers'
@@ -295,6 +338,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/day-book': {
+      id: '/_authenticated/day-book'
+      path: '/day-book'
+      fullPath: '/day-book'
+      preLoaderRoute: typeof AuthenticatedDayBookRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/devices': {
@@ -367,6 +417,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSuppliersRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/trends': {
+      id: '/_authenticated/trends'
+      path: '/trends'
+      fullPath: '/trends'
+      preLoaderRoute: typeof AuthenticatedTrendsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/i/$billNo': {
       id: '/i/$billNo'
       path: '/i/$billNo'
@@ -380,8 +437,10 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAlertsRoute: typeof AuthenticatedAlertsRoute
   AuthenticatedBillingRoute: typeof AuthenticatedBillingRoute
+  AuthenticatedCreditRoute: typeof AuthenticatedCreditRoute
   AuthenticatedCustomersRoute: typeof AuthenticatedCustomersRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedDayBookRoute: typeof AuthenticatedDayBookRoute
   AuthenticatedDevicesRoute: typeof AuthenticatedDevicesRoute
   AuthenticatedDocumentsRoute: typeof AuthenticatedDocumentsRoute
   AuthenticatedExpensesRoute: typeof AuthenticatedExpensesRoute
@@ -392,13 +451,16 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedStaffRoute: typeof AuthenticatedStaffRoute
   AuthenticatedSuppliersRoute: typeof AuthenticatedSuppliersRoute
+  AuthenticatedTrendsRoute: typeof AuthenticatedTrendsRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAlertsRoute: AuthenticatedAlertsRoute,
   AuthenticatedBillingRoute: AuthenticatedBillingRoute,
+  AuthenticatedCreditRoute: AuthenticatedCreditRoute,
   AuthenticatedCustomersRoute: AuthenticatedCustomersRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedDayBookRoute: AuthenticatedDayBookRoute,
   AuthenticatedDevicesRoute: AuthenticatedDevicesRoute,
   AuthenticatedDocumentsRoute: AuthenticatedDocumentsRoute,
   AuthenticatedExpensesRoute: AuthenticatedExpensesRoute,
@@ -409,6 +471,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedStaffRoute: AuthenticatedStaffRoute,
   AuthenticatedSuppliersRoute: AuthenticatedSuppliersRoute,
+  AuthenticatedTrendsRoute: AuthenticatedTrendsRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

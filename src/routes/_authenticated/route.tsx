@@ -1,7 +1,7 @@
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff, Package, Settings as SettingsIcon, AlertTriangle, BarChart3, Boxes, Users, Truck, UserCog, ClipboardList, Wallet, FileText, Store, Check, ChevronsUpDown } from "lucide-react";
+import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff, Package, Settings as SettingsIcon, AlertTriangle, BarChart3, Boxes, Users, Truck, UserCog, ClipboardList, Wallet, FileText, Store, Check, ChevronsUpDown, BookOpen, HandCoins, TrendingUp, Printer } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useMyRoles } from "@/hooks/use-role";
@@ -47,8 +47,11 @@ const NAV: NavGroup[] = [
   ] },
   { group: "Sales", items: [
     { to: "/billing", label: "Billing", icon: ScanBarcode },
+    { to: "/day-book", label: "Day Book", icon: BookOpen },
     { to: "/customers", label: "Customers", icon: Users },
+    { to: "/credit", label: "Credit", icon: HandCoins },
     { to: "/reports", label: "Reports", icon: BarChart3, roles: ["admin", "manager"] },
+    { to: "/trends", label: "Trends", icon: TrendingUp, roles: ["admin", "manager"] },
   ] },
   { group: "Products", items: [
     { to: "/products", label: "Products", icon: Package },
@@ -63,8 +66,10 @@ const NAV: NavGroup[] = [
     { to: "/staff", label: "Staff", icon: UserCog, roles: ["admin"] },
   ] },
   { group: "Branch settings", items: [
+    { to: "/devices", label: "Devices", icon: Printer },
     { to: "/settings", label: "Settings", icon: SettingsIcon, roles: ["admin", "manager"] },
   ] },
+
 ];
 
 
