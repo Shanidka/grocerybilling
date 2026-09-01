@@ -47,8 +47,11 @@ const NAV: NavGroup[] = [
   ] },
   { group: "Sales", items: [
     { to: "/billing", label: "Billing", icon: ScanBarcode },
+    { to: "/day-book", label: "Day Book", icon: BookOpen },
     { to: "/customers", label: "Customers", icon: Users },
+    { to: "/credit", label: "Credit", icon: HandCoins },
     { to: "/reports", label: "Reports", icon: BarChart3, roles: ["admin", "manager"] },
+    { to: "/trends", label: "Trends", icon: TrendingUp, roles: ["admin", "manager"] },
   ] },
   { group: "Products", items: [
     { to: "/products", label: "Products", icon: Package },
@@ -63,8 +66,10 @@ const NAV: NavGroup[] = [
     { to: "/staff", label: "Staff", icon: UserCog, roles: ["admin"] },
   ] },
   { group: "Branch settings", items: [
+    { to: "/devices", label: "Devices", icon: Printer },
     { to: "/settings", label: "Settings", icon: SettingsIcon, roles: ["admin", "manager"] },
   ] },
+
 ];
 
 
