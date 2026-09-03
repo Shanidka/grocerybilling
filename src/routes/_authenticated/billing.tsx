@@ -31,13 +31,13 @@ export const Route = createFileRoute("/_authenticated/billing")({
 type Product = {
   id: string; barcode: string | null; name: string; brand: string | null;
   selling_price: number; mrp: number; tax_pct: number; stock_qty: number; unit: string;
-  sold_by: string; price_per_kg: number;
+  sold_by: string; price_per_kg: number; purchase_price: number;
 };
 
 type CartLine = {
   product_id: string; name: string; unit_price: number; qty: number;
   tax_pct: number; discount: number; stock_qty: number;
-  sold_by: string; unit: string; mrp: number;
+  sold_by: string; unit: string; mrp: number; cost: number;
 };
 
 type HeldBill = {
@@ -86,7 +86,7 @@ function Billing() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
-        .select("id,barcode,name,brand,selling_price,mrp,tax_pct,stock_qty,unit,is_active,sold_by,price_per_kg")
+        .select("id,barcode,name,brand,selling_price,mrp,tax_pct,stock_qty,unit,is_active,sold_by,price_per_kg,purchase_price")
         .eq("store_id", storeId)
         .eq("is_active", true)
         .order("name");
@@ -165,6 +165,7 @@ function Billing() {
           product_id: p.id, name: p.name, unit_price,
           qty, tax_pct: Number(p.tax_pct), discount: 0, stock_qty: Number(p.stock_qty),
           sold_by: p.sold_by, unit: isWeight ? "kg" : p.unit, mrp: Number(p.mrp || 0),
+          cost: Number(p.purchase_price || 0),
         },
       ];
     });
@@ -624,6 +625,7 @@ function PaymentDialog({
         tax_pct: l.tax_pct,
         line_discount: l.discount,
         line_total: l.unit_price * l.qty - l.discount,
+        cost_at_sale: l.cost ?? 0,
       }));
 
       let bill_no = "";
