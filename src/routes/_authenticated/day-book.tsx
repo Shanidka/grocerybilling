@@ -26,13 +26,16 @@ export const Route = createFileRoute("/_authenticated/day-book")({
 
 function DayBook() {
   const storeId = useStoreId();
-  const [day, setDay] = useState(new Date().toISOString().slice(0, 10));
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const [day, setDay] = useState(todayStr);
+  const [dayTo, setDayTo] = useState(todayStr);
 
   const from = useMemo(() => new Date(day + "T00:00:00").toISOString(), [day]);
-  const to = useMemo(() => new Date(day + "T23:59:59.999").toISOString(), [day]);
+  const to = useMemo(() => new Date(dayTo + "T23:59:59.999").toISOString(), [dayTo]);
 
   const sales = useQuery({
-    queryKey: ["daybook-sales", storeId, day],
+    queryKey: ["daybook-sales", storeId, day, dayTo],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sales")
@@ -46,13 +49,13 @@ function DayBook() {
   });
 
   const expenses = useQuery({
-    queryKey: ["daybook-expenses", storeId, day],
+    queryKey: ["daybook-expenses", storeId, day, dayTo],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("expenses")
         .select("id,category,payee,amount,payment_mode,notes")
         .eq("store_id", storeId)
-        .eq("spent_on", day)
+        .gte("spent_on", day).lte("spent_on", dayTo)
         .order("created_at");
       if (error) throw error;
       return data ?? [];
@@ -76,10 +79,13 @@ function DayBook() {
       <div className="flex items-end justify-between flex-wrap gap-3 print:hidden">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2"><BookOpen className="size-6" /> Day Book</h1>
-          <p className="text-sm text-muted-foreground">All sales and expenses recorded on a single day.</p>
+          <p className="text-sm text-muted-foreground">All sales and expenses for a day or a date range.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Input type="date" className="w-44" value={day} onChange={(e) => setDay(e.target.value)} />
+          <Input type="date" className="w-40" value={day} onChange={(e) => { const v = e.target.value; setDay(v); if (v > dayTo) setDayTo(v); }} />
+          <span className="text-muted-foreground text-sm">→</span>
+          <Input type="date" className="w-40" value={dayTo} min={day} onChange={(e) => setDayTo(e.target.value)} />
+          <Button variant="ghost" size="sm" onClick={() => { setDay(todayStr); setDayTo(todayStr); }}>Today</Button>
           <Button variant="outline" onClick={() => window.print()}><Printer className="size-4" /> Print</Button>
         </div>
       </div>
@@ -99,13 +105,13 @@ function DayBook() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-left"><tr>
-                <th className="px-4 py-2.5">Time</th><th className="px-4 py-2.5">Bill</th><th className="px-4 py-2.5">Customer</th>
+                <th className="px-4 py-2.5">Date & time</th><th className="px-4 py-2.5">Bill</th><th className="px-4 py-2.5">Customer</th>
                 <th className="px-4 py-2.5">Mode</th>
                 <th className="px-4 py-2.5 text-right">Credit</th><th className="px-4 py-2.5 text-right">Total</th>
               </tr></thead>
               <tbody className="divide-y">{sales.data.map((r) => (
                 <tr key={r.id}>
-                  <td className="px-4 py-2.5">{new Date(r.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</td>
+                  <td className="px-4 py-2.5">{new Date(r.created_at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
                   <td className="px-4 py-2.5 font-mono text-xs">{r.bill_no}</td>
                   <td className="px-4 py-2.5 text-muted-foreground">{r.customer_name ?? "—"}</td>
                   <td className="px-4 py-2.5 capitalize">{r.payment_mode}</td>
