@@ -25,7 +25,7 @@ export const Route = createFileRoute("/_authenticated/trends")({
   }),
 });
 
-type Item = { name: string; qty: number | string; line_total: number | string; cost_at_sale: number | string };
+type Item = { name: string; qty: number | string; line_total: number | string; cost_at_sale: number | string; product_id: string | null };
 type SaleRow = { created_at: string; grand_total: number | string; sale_items: Item[] | null };
 
 function TrendsPage() {
@@ -44,7 +44,7 @@ function TrendsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sales")
-        .select("created_at,grand_total,sale_items(name,qty,line_total,cost_at_sale)")
+        .select("created_at,grand_total,sale_items(name,qty,line_total,cost_at_sale,product_id)")
         .eq("store_id", storeId)
         .gte("created_at", since.toISOString())
         .order("created_at");
@@ -99,7 +99,7 @@ function TrendsPage() {
         const cur = map.get(it.name) ?? { name: it.name, qty: 0, revenue: 0, profit: 0 };
         cur.qty += Number(it.qty);
         cur.revenue += Number(it.line_total);
-        cur.profit += Number(it.line_total) - Number(it.cost_at_sale ?? 0) * Number(it.qty);
+        cur.profit += Number(it.line_total) - unitCost(it) * Number(it.qty);
         map.set(it.name, cur);
       }
     }
