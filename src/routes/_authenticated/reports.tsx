@@ -182,8 +182,10 @@ function Table({ head, children, exportCsv }: { head: string[]; children: React.
   );
 }
 
-const N = ({ children }: { children: React.ReactNode }) => <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap">{children}</td>;
-const T = ({ children }: { children: React.ReactNode }) => <td className="px-3 py-2.5">{children}</td>;
+const N = ({ children, className = "" }: { children: React.ReactNode; className?: string }) =>
+  <td className={`px-3 py-2.5 text-right tabular-nums whitespace-nowrap ${className}`}>{children}</td>;
+const T = ({ children, className = "" }: { children: React.ReactNode; className?: string }) =>
+  <td className={`px-3 py-2.5 ${className}`}>{children}</td>;
 
 /** Everything a tab needs for a range: sales, costs, expenses, returns. */
 function usePnl(range: Range, costing: "captured" | "average") {
