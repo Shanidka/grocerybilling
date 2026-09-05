@@ -8,6 +8,8 @@ export type QueuedSaleItem = {
   tax_pct: number;
   line_discount: number;
   line_total: number;
+  cost_at_sale?: number;
+
 };
 
 export type QueuedSale = {
