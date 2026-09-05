@@ -65,10 +65,21 @@ function TrendsPage() {
     },
   });
 
+  /** Unit cost: the cost captured at billing time, else the product's current purchase price. */
+  const unitCost = useMemo(() => {
+    const costs = new Map((products.data ?? []).map((p) => [p.id, Number(p.purchase_price) || 0]));
+    return (it: Item) => {
+      const captured = Number(it.cost_at_sale ?? 0);
+      if (captured > 0) return captured;
+      return it.product_id ? costs.get(it.product_id) ?? 0 : 0;
+    };
+  }, [products.data]);
+
   const windowRows = useMemo(() => {
     const cut = new Date(); cut.setDate(cut.getDate() - Number(days)); cut.setHours(0, 0, 0, 0);
     return (sales.data ?? []).filter((s) => new Date(s.created_at) >= cut);
   }, [sales.data, days]);
+
 
   const daily = useMemo(() => {
     const map = new Map<string, number>();
