@@ -115,7 +115,7 @@ function TrendsPage() {
       }
     }
     return Array.from(map.values()).sort((a, b) => b.qty - a.qty);
-  }, [windowRows]);
+  }, [windowRows, unitCost]);
 
   const bestByMonth = useMemo(() => {
     const months = new Map<string, Map<string, { qty: number; revenue: number }>>();
