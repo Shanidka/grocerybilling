@@ -30,6 +30,7 @@ export const Route = createFileRoute("/_authenticated/credit")({
 
 function CreditPage() {
   const storeId = useStoreId();
+  const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [openKey, setOpenKey] = useState<string | null>(null);
 
