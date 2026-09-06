@@ -840,9 +840,8 @@ function ShareBillDialog({ info, onClose }: { info: { billNo: string; phone: str
             </Button>
             <Button
               variant="outline"
-              disabled={!waNumber}
               onClick={() => window.open(waLink, "_blank", "noopener")}
-              title={waNumber ? "Share via WhatsApp" : "Add a customer phone first"}
+              title={waNumber ? "Send on WhatsApp" : "Pick a contact in WhatsApp"}
             >
               <MessageCircle className="size-4" /> WhatsApp
             </Button>
