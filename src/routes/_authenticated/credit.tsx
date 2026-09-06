@@ -33,6 +33,8 @@ function CreditPage() {
   const [q, setQ] = useState("");
   const [openKey, setOpenKey] = useState<string | null>(null);
 
+  const [collect, setCollect] = useState<{ key: string; name: string; phone: string | null; due: number } | null>(null);
+
   const list = useQuery({
     queryKey: ["credit-sales", storeId],
     queryFn: async () => {
