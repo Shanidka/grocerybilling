@@ -32,6 +32,66 @@ export type Database = {
         }
         Relationships: []
       }
+      credit_collections: {
+        Row: {
+          amount: number
+          collected_at: string
+          collected_by: string | null
+          created_at: string
+          customer_key: string
+          customer_name: string | null
+          customer_phone: string | null
+          id: string
+          notes: string | null
+          payment_mode: string
+          sale_id: string | null
+          store_id: string | null
+        }
+        Insert: {
+          amount: number
+          collected_at?: string
+          collected_by?: string | null
+          created_at?: string
+          customer_key: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          notes?: string | null
+          payment_mode?: string
+          sale_id?: string | null
+          store_id?: string | null
+        }
+        Update: {
+          amount?: number
+          collected_at?: string
+          collected_by?: string | null
+          created_at?: string
+          customer_key?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          notes?: string | null
+          payment_mode?: string
+          sale_id?: string | null
+          store_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_collections_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_collections_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           created_at: string
