@@ -316,7 +316,24 @@ function Billing() {
                   ref={searchRef}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search product by name, brand or barcode…"
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    const code = search.trim();
+                    if (!code) return;
+                    const exact = products.find((x) => x.barcode && x.barcode === code);
+                    if (exact || parseScaleBarcode(code)) {
+                      handleScan(code);
+                    } else if (searchResults.length) {
+                      addProduct(searchResults[0]);
+                      toast.success(`Added ${searchResults[0].name}`);
+                    } else {
+                      toast.error("No matching product");
+                      return;
+                    }
+                    setSearch("");
+                  }}
+                  placeholder="Scan or search — press Enter to add"
                   className="h-11 pl-9"
                   autoFocus
                 />
