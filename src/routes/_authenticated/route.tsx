@@ -82,7 +82,13 @@ function AppShell() {
   const [storePickerOpen, setStorePickerOpen] = useState(false);
 
   const [open, setOpen] = useState(false);
+  const [sideHidden, setSideHidden] = useState(false);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+
+  // Billing starts full-screen: hide the side panel automatically (arrow button un-hides it)
+  useEffect(() => {
+    setSideHidden(pathname === "/billing");
+  }, [pathname]);
 
   useEffect(() => {
     const on = () => setOnline(true);
