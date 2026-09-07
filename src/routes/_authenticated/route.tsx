@@ -145,7 +145,7 @@ function AppShell() {
       <aside
         className={`fixed lg:static inset-y-0 left-0 z-40 w-64 bg-sidebar text-sidebar-foreground flex flex-col transform transition-transform ${
           open ? "translate-x-0" : "-translate-x-full"
-        } lg:translate-x-0`}
+        } lg:translate-x-0 ${sideHidden ? "lg:hidden" : ""}`}
       >
         <div className="px-5 py-4 border-b border-sidebar-border">
           <div className="flex items-center gap-2">
