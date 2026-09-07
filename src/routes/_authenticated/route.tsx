@@ -1,7 +1,7 @@
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff, Package, Settings as SettingsIcon, AlertTriangle, BarChart3, Boxes, Users, Truck, UserCog, ClipboardList, Wallet, FileText, Store, Check, ChevronsUpDown, BookOpen, HandCoins, TrendingUp, Printer } from "lucide-react";
+import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff, Package, Settings as SettingsIcon, AlertTriangle, BarChart3, Boxes, Users, Truck, UserCog, ClipboardList, Wallet, FileText, Store, Check, ChevronsUpDown, ChevronRight, BookOpen, HandCoins, TrendingUp, Printer } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useMyRoles } from "@/hooks/use-role";
@@ -82,7 +82,13 @@ function AppShell() {
   const [storePickerOpen, setStorePickerOpen] = useState(false);
 
   const [open, setOpen] = useState(false);
+  const [sideHidden, setSideHidden] = useState(false);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+
+  // Billing starts full-screen: hide the side panel automatically (arrow button un-hides it)
+  useEffect(() => {
+    setSideHidden(pathname === "/billing");
+  }, [pathname]);
 
   useEffect(() => {
     const on = () => setOnline(true);
@@ -139,7 +145,7 @@ function AppShell() {
       <aside
         className={`fixed lg:static inset-y-0 left-0 z-40 w-64 bg-sidebar text-sidebar-foreground flex flex-col transform transition-transform ${
           open ? "translate-x-0" : "-translate-x-full"
-        } lg:translate-x-0`}
+        } lg:translate-x-0 ${sideHidden ? "lg:hidden" : ""}`}
       >
         <div className="px-5 py-4 border-b border-sidebar-border">
           <div className="flex items-center gap-2">
@@ -237,6 +243,17 @@ function AppShell() {
       </aside>
 
       {open && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setOpen(false)} />}
+
+      {sideHidden && (
+        <button
+          type="button"
+          onClick={() => setSideHidden(false)}
+          title="Show menu"
+          className="hidden lg:grid fixed left-0 top-1/2 -translate-y-1/2 z-40 size-8 place-items-center rounded-r-md bg-sidebar text-sidebar-foreground shadow-md hover:w-10 transition-all"
+        >
+          <ChevronRight className="size-4" />
+        </button>
+      )}
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="lg:hidden h-14 px-4 flex items-center gap-3 border-b bg-surface">

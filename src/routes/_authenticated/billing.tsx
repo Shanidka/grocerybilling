@@ -73,6 +73,8 @@ function Billing() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [shareInfo, setShareInfo] = useState<{ billNo: string; phone: string; total: number } | null>(null);
   const [search, setSearch] = useState("");
+  const [highlight, setHighlight] = useState(0);
+  const [matchPick, setMatchPick] = useState<Product[] | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [billDiscount, setBillDiscount] = useState(0);
   const [customerName, setCustomerName] = useState("");
@@ -183,11 +185,12 @@ function Billing() {
         return;
       }
     }
-    // 2) Exact barcode match
-    const p = products.find((x) => x.barcode === code);
-    if (!p) { toast.error(`No product for ${code}`); return; }
-    addProduct(p);
-    toast.success(`Added ${p.name}`);
+    // 2) Exact barcode match — same barcode can exist on multiple rows (different MRP/price)
+    const matches = products.filter((x) => x.barcode === code);
+    if (matches.length === 0) { toast.error(`No product for ${code}`); return; }
+    if (matches.length > 1) { setMatchPick(matches); return; }
+    addProduct(matches[0]);
+    toast.success(`Added ${matches[0].name}`);
   };
 
   const updateLine = (i: number, patch: Partial<CartLine>) => {
@@ -315,25 +318,36 @@ function Billing() {
                 <Input
                   ref={searchRef}
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => { setSearch(e.target.value); setHighlight(0); }}
                   onKeyDown={(e) => {
+                    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                      if (!searchResults.length) return;
+                      e.preventDefault();
+                      setHighlight((h) => {
+                        const n = searchResults.length;
+                        return e.key === "ArrowDown" ? (h + 1) % n : (h - 1 + n) % n;
+                      });
+                      return;
+                    }
                     if (e.key !== "Enter") return;
                     e.preventDefault();
                     const code = search.trim();
                     if (!code) return;
-                    const exact = products.find((x) => x.barcode && x.barcode === code);
-                    if (exact || parseScaleBarcode(code)) {
+                    const exactCount = products.filter((x) => x.barcode && x.barcode === code).length;
+                    if (exactCount > 0 || parseScaleBarcode(code)) {
                       handleScan(code);
                     } else if (searchResults.length) {
-                      addProduct(searchResults[0]);
-                      toast.success(`Added ${searchResults[0].name}`);
+                      const p = searchResults[Math.min(highlight, searchResults.length - 1)];
+                      addProduct(p);
+                      toast.success(`Added ${p.name}`);
                     } else {
                       toast.error("No matching product");
                       return;
                     }
                     setSearch("");
+                    setHighlight(0);
                   }}
-                  placeholder="Scan or search — press Enter to add"
+                  placeholder="Scan or search — ↑↓ select, Enter to add"
                   className="h-11 pl-9"
                   autoFocus
                 />
@@ -347,11 +361,14 @@ function Billing() {
                 {searchResults.length === 0 ? (
                   <div className="p-3 text-sm text-muted-foreground">No matches.</div>
                 ) : (
-                  searchResults.map((p) => (
+                  searchResults.map((p, idx) => (
                     <button
                       key={p.id}
-                      onClick={() => { addProduct(p); setSearch(""); searchRef.current?.focus(); }}
-                      className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-accent text-sm border-b last:border-0"
+                      onMouseEnter={() => setHighlight(idx)}
+                      onClick={() => { addProduct(p); setSearch(""); setHighlight(0); searchRef.current?.focus(); }}
+                      className={`w-full px-3 py-2 flex items-center justify-between text-left text-sm border-b last:border-0 ${
+                        idx === highlight ? "bg-accent" : "hover:bg-accent/60"
+                      }`}
                     >
                       <div className="min-w-0">
                         <div className="font-medium truncate">{p.name}</div>
@@ -522,6 +539,31 @@ function Billing() {
         }}
       />
       <ShareBillDialog info={shareInfo} onClose={() => setShareInfo(null)} />
+
+      {/* Multiple products share this barcode — pick one */}
+      <Dialog open={!!matchPick} onOpenChange={(v) => !v && setMatchPick(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Select product</DialogTitle></DialogHeader>
+          <DialogDescription>This barcode matches {matchPick?.length ?? 0} products — choose the right one.</DialogDescription>
+          <div className="divide-y max-h-96 overflow-auto -mx-6">
+            {matchPick?.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => { addProduct(p); toast.success(`Added ${p.name}`); setMatchPick(null); }}
+                className="w-full px-6 py-3 text-left hover:bg-accent flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{p.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {p.brand ?? "—"} · MRP {inr(Number(p.mrp || 0))} · stock {Number(p.stock_qty)} {p.unit}
+                  </div>
+                </div>
+                <div className="font-semibold tabular-nums">{inr(p.sold_by === "weight" ? Number(p.price_per_kg) : Number(p.selling_price))}</div>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
