@@ -73,6 +73,8 @@ function Billing() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [shareInfo, setShareInfo] = useState<{ billNo: string; phone: string; total: number } | null>(null);
   const [search, setSearch] = useState("");
+  const [highlight, setHighlight] = useState(0);
+  const [matchPick, setMatchPick] = useState<Product[] | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [billDiscount, setBillDiscount] = useState(0);
   const [customerName, setCustomerName] = useState("");
@@ -183,11 +185,12 @@ function Billing() {
         return;
       }
     }
-    // 2) Exact barcode match
-    const p = products.find((x) => x.barcode === code);
-    if (!p) { toast.error(`No product for ${code}`); return; }
-    addProduct(p);
-    toast.success(`Added ${p.name}`);
+    // 2) Exact barcode match — same barcode can exist on multiple rows (different MRP/price)
+    const matches = products.filter((x) => x.barcode === code);
+    if (matches.length === 0) { toast.error(`No product for ${code}`); return; }
+    if (matches.length > 1) { setMatchPick(matches); return; }
+    addProduct(matches[0]);
+    toast.success(`Added ${matches[0].name}`);
   };
 
   const updateLine = (i: number, patch: Partial<CartLine>) => {
