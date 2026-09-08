@@ -14,6 +14,80 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          actor_name: string | null
+          area: string
+          created_at: string
+          details: Json | null
+          entity_id: string | null
+          id: string
+          store_id: string | null
+          summary: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          actor_name?: string | null
+          area: string
+          created_at?: string
+          details?: Json | null
+          entity_id?: string | null
+          id?: string
+          store_id?: string | null
+          summary: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          actor_name?: string | null
+          area?: string
+          created_at?: string
+          details?: Json | null
+          entity_id?: string | null
+          id?: string
+          store_id?: string | null
+          summary?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_logs_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      app_roles: {
+        Row: {
+          base_role: string
+          created_at: string
+          is_system: boolean
+          key: string
+          label: string
+          updated_at: string
+        }
+        Insert: {
+          base_role?: string
+          created_at?: string
+          is_system?: boolean
+          key: string
+          label: string
+          updated_at?: string
+        }
+        Update: {
+          base_role?: string
+          created_at?: string
+          is_system?: boolean
+          key?: string
+          label?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       categories: {
         Row: {
           created_at: string
@@ -719,6 +793,41 @@ export type Database = {
           },
         ]
       }
+      role_permissions: {
+        Row: {
+          allowed: boolean
+          created_at: string
+          id: string
+          page: string
+          role_key: string
+          updated_at: string
+        }
+        Insert: {
+          allowed?: boolean
+          created_at?: string
+          id?: string
+          page: string
+          role_key: string
+          updated_at?: string
+        }
+        Update: {
+          allowed?: boolean
+          created_at?: string
+          id?: string
+          page?: string
+          role_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_role_key_fkey"
+            columns: ["role_key"]
+            isOneToOne: false
+            referencedRelation: "app_roles"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
       sale_items: {
         Row: {
           cost_at_sale: number
@@ -1089,18 +1198,21 @@ export type Database = {
           created_at: string
           id: string
           role: Database["public"]["Enums"]["app_role"]
+          role_key: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
           role: Database["public"]["Enums"]["app_role"]
+          role_key?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          role_key?: string | null
           user_id?: string
         }
         Relationships: []
@@ -1123,7 +1235,12 @@ export type Database = {
       next_po_no: { Args: never; Returns: string }
     }
     Enums: {
-      app_role: "admin" | "manager" | "cashier"
+      app_role:
+        | "admin"
+        | "manager"
+        | "cashier"
+        | "sales_executive"
+        | "store_keeper"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1251,7 +1368,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "manager", "cashier"],
+      app_role: [
+        "admin",
+        "manager",
+        "cashier",
+        "sales_executive",
+        "store_keeper",
+      ],
     },
   },
 } as const
