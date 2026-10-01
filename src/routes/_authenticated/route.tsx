@@ -35,39 +35,38 @@ export const Route = createFileRoute("/_authenticated")({
   component: AppShell,
 });
 
-type Role = "admin" | "manager" | "cashier";
-type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; roles?: Role[] };
+type NavItem = { to: string; page: string; label: string; icon: typeof LayoutDashboard };
 type NavGroup = { group: string; items: NavItem[] };
 
 const NAV: NavGroup[] = [
   { group: "Overview", items: [
-    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/alerts", label: "Alerts", icon: AlertTriangle },
-    { to: "/documents", label: "Documents", icon: FileText },
+    { to: "/dashboard", page: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/alerts", page: "alerts", label: "Alerts", icon: AlertTriangle },
+    { to: "/documents", page: "documents", label: "Documents", icon: FileText },
   ] },
   { group: "Sales", items: [
-    { to: "/billing", label: "Billing", icon: ScanBarcode },
-    { to: "/day-book", label: "Day Book", icon: BookOpen },
-    { to: "/customers", label: "Customers", icon: Users },
-    { to: "/credit", label: "Credit", icon: HandCoins },
-    { to: "/reports", label: "Reports", icon: BarChart3, roles: ["admin", "manager"] },
-    { to: "/trends", label: "Trends", icon: TrendingUp, roles: ["admin", "manager"] },
+    { to: "/billing", page: "billing", label: "Billing", icon: ScanBarcode },
+    { to: "/day-book", page: "day-book", label: "Day Book", icon: BookOpen },
+    { to: "/customers", page: "customers", label: "Customers", icon: Users },
+    { to: "/credit", page: "credit", label: "Credit", icon: HandCoins },
+    { to: "/reports", page: "reports", label: "Reports", icon: BarChart3 },
+    { to: "/trends", page: "trends", label: "Trends", icon: TrendingUp },
   ] },
   { group: "Products", items: [
-    { to: "/products", label: "Products", icon: Package },
-    { to: "/inventory", label: "Inventory", icon: Boxes },
+    { to: "/products", page: "products", label: "Products", icon: Package },
+    { to: "/inventory", page: "inventory", label: "Inventory", icon: Boxes },
   ] },
   { group: "Purchases", items: [
-    { to: "/purchase-orders", label: "Purchase Orders", icon: ClipboardList, roles: ["admin", "manager"] },
-    { to: "/suppliers", label: "Suppliers", icon: Truck, roles: ["admin", "manager"] },
-    { to: "/expenses", label: "Expenses", icon: Wallet, roles: ["admin", "manager"] },
+    { to: "/purchase-orders", page: "purchase-orders", label: "Purchase Orders", icon: ClipboardList },
+    { to: "/suppliers", page: "suppliers", label: "Suppliers", icon: Truck },
+    { to: "/expenses", page: "expenses", label: "Expenses", icon: Wallet },
   ] },
   { group: "Employees", items: [
-    { to: "/staff", label: "Staff", icon: UserCog, roles: ["admin"] },
+    { to: "/staff", page: "staff", label: "Staff", icon: UserCog },
   ] },
   { group: "Branch settings", items: [
-    { to: "/devices", label: "Devices", icon: Printer },
-    { to: "/settings", label: "Settings", icon: SettingsIcon, roles: ["admin", "manager"] },
+    { to: "/devices", page: "devices", label: "Devices", icon: Printer },
+    { to: "/settings", page: "settings", label: "Settings", icon: SettingsIcon },
   ] },
 
 ];
