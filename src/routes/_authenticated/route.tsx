@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useShopSettings } from "@/lib/shop-settings";
 import { useActiveStore } from "@/lib/active-store";
+import { useAccess, useDesignations } from "@/lib/permissions";
 
 
 const INACTIVITY_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -76,6 +77,8 @@ function AppShell() {
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: roles } = useMyRoles();
+  const access = useAccess();
+  const { data: designations } = useDesignations();
   const { data: shop } = useShopSettings();
   const { storeId, store, stores, setStoreId } = useActiveStore();
   const [storePickerOpen, setStorePickerOpen] = useState(false);
@@ -194,7 +197,7 @@ function AppShell() {
         </div>
         <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
           {NAV.map((g) => {
-            const items = g.items.filter((n) => !n.roles || n.roles.some((r) => (roles ?? []).includes(r)));
+            const items = g.items.filter((n) => (access.isLoading ? true : access.can(n.page)));
             if (!items.length) return null;
             return (
               <div key={g.group} className="ml-3 pl-3 border-l border-sidebar-border/70 space-y-1">
@@ -230,7 +233,7 @@ function AppShell() {
             </div>
           )}
           <div className="px-3 py-2 text-xs text-sidebar-foreground/60">
-            Role: <span className="text-sidebar-foreground capitalize">{roles?.[0] ?? "—"}</span>
+            Role: <span className="text-sidebar-foreground">{(designations ?? []).find((d) => d.key === access.roleKeys[0])?.label ?? (roles?.[0] ?? "—")}</span>
           </div>
           <button
             onClick={signOut}
