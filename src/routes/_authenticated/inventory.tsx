@@ -231,6 +231,7 @@ function StockTab() {
                 <th className="px-4 py-2.5">Product</th><th className="px-4 py-2.5">Company</th>
                 <th className="px-4 py-2.5">Stock</th><th className="px-4 py-2.5">Min</th>
                 <th className="px-4 py-2.5">Max</th><th className="px-4 py-2.5">Price</th>
+                <th className="px-4 py-2.5">Stock value</th>
               </tr></thead>
               <tbody className="divide-y">{rows.map((p) => {
                 const low = Number(p.stock_qty) <= Number(p.min_qty) && Number(p.min_qty) > 0;
@@ -242,6 +243,7 @@ function StockTab() {
                     <td className="px-4 py-3">{Number(p.min_qty)}</td>
                     <td className="px-4 py-3">{Number(p.max_qty)}</td>
                     <td className="px-4 py-3">{inr(p.selling_price)}</td>
+                    <td className="px-4 py-3 font-medium">{inr(Number(p.stock_qty) * unitValue(p))}</td>
                   </tr>
                 );
               })}</tbody>
