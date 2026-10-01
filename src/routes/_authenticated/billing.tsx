@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { logActivity } from "@/lib/activity-log";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -764,6 +765,7 @@ function PaymentDialog({
         } catch { /* non-blocking */ }
       }
 
+      void logActivity("billing", offline ? "sale-offline" : "sale", `Bill ${bill_no} — ${cart.length} item(s), total ${totals.grand.toFixed(2)} (${mode})`, { entityId: bill_no, details: { total: totals.grand, items: cart.length, payment_mode: mode, customer: customerName || null, offline } });
       if (!offline) toast.success(`Bill ${bill_no} completed`);
       onCompleted(bill_no, customerPhone, totals.grand);
       onClose();

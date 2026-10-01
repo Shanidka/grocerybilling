@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { logActivity } from "@/lib/activity-log";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -156,6 +157,7 @@ function ProductsPage() {
       : await supabase.from("products").insert(payload);
     setSaving(false);
     if (res.error) return toast.error(res.error.message);
+    void logActivity("products", editing ? "update" : "create", `${editing ? "Updated" : "Added"} product ${payload.name} (stock ${payload.stock_qty}, price ${payload.selling_price})`, { entityId: editing?.id ?? null, details: { name: payload.name, selling_price: payload.selling_price, purchase_price: payload.purchase_price, stock_qty: payload.stock_qty } });
     toast.success(editing ? "Updated" : "Product added");
     setOpen(false);
     qc.invalidateQueries({ queryKey: ["all-products"] });
@@ -170,6 +172,7 @@ function ProductsPage() {
     if (!confirm(`Delete ${p.name}?`)) return;
     const { error } = await supabase.from("products").update({ is_active: false }).eq("id", p.id);
     if (error) return toast.error(error.message);
+    void logActivity("products", "archive", `Archived product ${p.name}`, { entityId: p.id });
     toast.success("Archived");
     qc.invalidateQueries({ queryKey: ["all-products"] });
   };

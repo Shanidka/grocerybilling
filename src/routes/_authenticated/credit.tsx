@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { logActivity } from "@/lib/activity-log";
 import { supabase } from "@/integrations/supabase/client";
 import { useStoreId } from "@/lib/active-store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -236,6 +237,7 @@ function CollectDialog({
     });
     setSaving(false);
     if (error) { toast.error(error.message); return; }
+    void logActivity("credit", "collect", `Collected ${amt.toFixed(2)} from ${info.name} (${mode})`, { entityId: info.key, details: { amount: amt, mode, customer: info.name, phone: info.phone } });
     toast.success(`Collected ${inr(amt)} from ${info.name}`);
     setAmount(""); setNotes(""); setMode("cash");
     onDone();
