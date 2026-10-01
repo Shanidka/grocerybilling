@@ -1,4 +1,5 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { logActivity } from "@/lib/activity-log";
 import { supabase } from "@/integrations/supabase/client";
 import { useStoreId } from "@/lib/active-store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -94,6 +95,7 @@ function ExpensesPage() {
       payment_mode: mode, notes: notes || null, created_by: u.user!.id,
     });
     if (error) return toast.error(error.message);
+    void logActivity("expenses", "create", `Expense ${category} ${Number(amount).toFixed(2)} (${mode})${payee ? ` to ${payee}` : ""}`, { details: { category, amount: Number(amount), mode, payee, spent_on: date } });
     toast.success("Expense recorded");
     setOpen(false); setAmount(""); setPayee(""); setNotes("");
     qc.invalidateQueries({ queryKey: ["expenses"] });
@@ -103,6 +105,7 @@ function ExpensesPage() {
   const remove = async (id: string) => {
     const { error } = await supabase.from("expenses").delete().eq("id", id);
     if (error) return toast.error(error.message);
+    void logActivity("expenses", "delete", `Deleted an expense entry`, { entityId: id });
     qc.invalidateQueries({ queryKey: ["expenses"] });
   };
 

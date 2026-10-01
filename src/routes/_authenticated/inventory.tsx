@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { logActivity } from "@/lib/activity-log";
 import { supabase } from "@/integrations/supabase/client";
 import { useStoreId } from "@/lib/active-store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -119,24 +120,98 @@ function StockTab() {
   const [search, setSearch] = useState("");
   const [brand, setBrand] = useState("__all");
   const storeId = useStoreId();
+  const [valueBasis, setValueBasis] = useState<"cost" | "selling">("cost");
   const q = useQuery({
     queryKey: ["inv-stock", storeId],
     queryFn: async () => {
       const { data, error } = await supabase.from("products")
-        .select("id,name,brand,unit,stock_qty,min_qty,max_qty,selling_price,updated_at")
+        .select("id,name,brand,unit,stock_qty,min_qty,max_qty,purchase_price,selling_price,updated_at")
         .eq("store_id", storeId).eq("is_active", true).order("name");
       if (error) throw error;
       return data ?? [];
     },
   });
   const brands = useMemo(() => Array.from(new Set((q.data ?? []).map((p) => p.brand).filter(Boolean) as string[])).sort(), [q.data]);
+  const unitValue = (p: { purchase_price: number | null; selling_price: number | null }) =>
+    Number((valueBasis === "cost" ? p.purchase_price : p.selling_price) ?? 0);
   const rows = useMemo(() => (q.data ?? []).filter((p) => {
     if (brand !== "__all" && (p.brand ?? "") !== brand) return false;
     if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   }), [q.data, brand, search]);
+
+  const allValue = useMemo(
+    () => (q.data ?? []).reduce((s, p) => s + Number(p.stock_qty) * unitValue(p), 0),
+    [q.data, valueBasis],
+  );
+  const filteredValue = useMemo(
+    () => rows.reduce((s, p) => s + Number(p.stock_qty) * unitValue(p), 0),
+    [rows, valueBasis],
+  );
+  const byCompany = useMemo(() => {
+    const m = new Map<string, { qty: number; value: number; count: number }>();
+    for (const p of q.data ?? []) {
+      const k = p.brand || "Unbranded";
+      const cur = m.get(k) ?? { qty: 0, value: 0, count: 0 };
+      cur.qty += Number(p.stock_qty);
+      cur.value += Number(p.stock_qty) * unitValue(p);
+      cur.count += 1;
+      m.set(k, cur);
+    }
+    return Array.from(m.entries()).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.value - a.value);
+  }, [q.data, valueBasis]);
+
   return (
     <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card className="p-4">
+          <div className="text-xs text-muted-foreground">Total stock value (all products)</div>
+          <div className="text-2xl font-semibold mt-1">{inr(allValue)}</div>
+          <div className="text-[11px] text-muted-foreground mt-1">{(q.data ?? []).length} product(s)</div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs text-muted-foreground">Value in current view</div>
+          <div className="text-2xl font-semibold mt-1">{inr(filteredValue)}</div>
+          <div className="text-[11px] text-muted-foreground mt-1">{rows.length} product(s)</div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs text-muted-foreground mb-1">Value based on</div>
+          <Select value={valueBasis} onValueChange={(v) => setValueBasis(v as "cost" | "selling")}>
+            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="cost">Purchase cost</SelectItem>
+              <SelectItem value="selling">Selling price</SelectItem>
+            </SelectContent>
+          </Select>
+        </Card>
+      </div>
+
+      <Card className="p-0 overflow-hidden">
+        <div className="px-4 py-2.5 text-sm font-medium bg-muted/50">Company-wise stock value</div>
+        <div className="overflow-x-auto max-h-64 overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/30 text-left"><tr>
+              <th className="px-4 py-2">Company</th><th className="px-4 py-2">Products</th>
+              <th className="px-4 py-2">Total qty</th><th className="px-4 py-2">Stock value</th>
+            </tr></thead>
+            <tbody className="divide-y">
+              {byCompany.map((c) => (
+                <tr key={c.name} className="cursor-pointer hover:bg-muted/40" onClick={() => setBrand(c.name === "Unbranded" ? "__all" : c.name)}>
+                  <td className="px-4 py-2 font-medium">{c.name}</td>
+                  <td className="px-4 py-2 text-muted-foreground">{c.count}</td>
+                  <td className="px-4 py-2">{Math.round(c.qty * 1000) / 1000}</td>
+                  <td className="px-4 py-2 font-medium">{inr(c.value)}</td>
+                </tr>
+              ))}
+              <tr className="bg-muted/40 font-semibold">
+                <td className="px-4 py-2">All companies</td><td className="px-4 py-2"></td><td className="px-4 py-2"></td>
+                <td className="px-4 py-2">{inr(allValue)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
       <div className="flex items-center gap-2 flex-wrap">
         <Input className="max-w-xs" placeholder="Search product…" value={search} onChange={(e) => setSearch(e.target.value)} />
         <Select value={brand} onValueChange={setBrand}>
@@ -157,6 +232,7 @@ function StockTab() {
                 <th className="px-4 py-2.5">Product</th><th className="px-4 py-2.5">Company</th>
                 <th className="px-4 py-2.5">Stock</th><th className="px-4 py-2.5">Min</th>
                 <th className="px-4 py-2.5">Max</th><th className="px-4 py-2.5">Price</th>
+                <th className="px-4 py-2.5">Stock value</th>
               </tr></thead>
               <tbody className="divide-y">{rows.map((p) => {
                 const low = Number(p.stock_qty) <= Number(p.min_qty) && Number(p.min_qty) > 0;
@@ -168,6 +244,7 @@ function StockTab() {
                     <td className="px-4 py-3">{Number(p.min_qty)}</td>
                     <td className="px-4 py-3">{Number(p.max_qty)}</td>
                     <td className="px-4 py-3">{inr(p.selling_price)}</td>
+                    <td className="px-4 py-3 font-medium">{inr(Number(p.stock_qty) * unitValue(p))}</td>
                   </tr>
                 );
               })}</tbody>
@@ -280,6 +357,7 @@ function PurchasesTab() {
       qc.invalidateQueries({ queryKey: ["suppliers"] });
     }
 
+    void logActivity("purchases", "create", `Purchase entry ${invoice || "(no invoice)"} from ${supplier || "unknown supplier"} — ${rows.length} item(s), ${total.toFixed(2)}`, { entityId: entry.id, details: { supplier, invoice_no: invoice, total, items: rows.length } });
     toast.success("Purchase recorded, stock updated");
     setOpen(false); setSupplier(""); setInvoice(""); setItems([]);
     qc.invalidateQueries({ queryKey: ["inv-purchases"] });
@@ -516,6 +594,7 @@ function AdjustmentsTab() {
     const { data: u } = await supabase.auth.getUser();
     const { error } = await supabase.from("stock_adjustments").insert({ product_id: pid, delta: Number(delta), reason, notes, created_by: u.user!.id });
     if (error) return toast.error(error.message);
+    void logActivity("stock", "adjust", `Stock adjustment ${Number(delta) > 0 ? "+" : ""}${Number(delta)} on ${products?.find((p) => p.id === pid)?.name ?? pid} (${reason})`, { entityId: pid, details: { delta: Number(delta), reason, notes } });
     toast.success("Adjustment saved");
     setOpen(false); setPid(""); setDelta(""); setNotes("");
     qc.invalidateQueries({ queryKey: ["inv-adjust"] });
@@ -599,6 +678,7 @@ function DamagedTab() {
     const { data: u } = await supabase.auth.getUser();
     const { error } = await supabase.from("damaged_products").insert({ product_id: pid, qty: Number(qty), reason, loss_value: Number(loss || 0), created_by: u.user!.id });
     if (error) return toast.error(error.message);
+    void logActivity("stock", "damage", `Damage ${Number(qty)} of ${products?.find((p) => p.id === pid)?.name ?? pid}`, { entityId: pid, details: { qty: Number(qty), reason, loss_value: Number(loss || 0) } });
     toast.success("Damage logged");
     setOpen(false); setPid(""); setQty("1"); setReason(""); setLoss("");
     qc.invalidateQueries({ queryKey: ["inv-damaged"] });
@@ -681,6 +761,7 @@ function ReturnsTab() {
     const { data: u } = await supabase.auth.getUser();
     const { error } = await supabase.from("product_returns").insert({ product_id: pid, qty: Number(qty), refund_amount: Number(refund || 0), reason, restock: restock === "true", created_by: u.user!.id });
     if (error) return toast.error(error.message);
+    void logActivity("stock", "return", `Return ${Number(qty)} of ${products?.find((p) => p.id === pid)?.name ?? pid}`, { entityId: pid, details: { qty: Number(qty), refund: Number(refund || 0), restock: restock === "true", reason } });
     toast.success("Return recorded");
     setOpen(false); setPid(""); setQty("1"); setRefund(""); setReason("");
     qc.invalidateQueries({ queryKey: ["inv-returns"] });

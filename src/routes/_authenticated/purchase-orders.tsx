@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { logActivity } from "@/lib/activity-log";
 import { supabase } from "@/integrations/supabase/client";
 import { useStoreId } from "@/lib/active-store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -246,6 +247,7 @@ function POEditor({ existing, onClose, onSaved }: { existing: PO | null; onClose
       );
       if (e2) throw e2;
 
+      void logActivity("purchase-orders", existing ? "update" : "create", `${existing ? "Updated" : "Created"} purchase order for ${payload.supplier_name ?? "supplier"} — ${items.length} item(s), status ${status}`, { entityId: poId ?? null, details: { supplier: payload.supplier_name, status, items: items.length } });
       toast.success(existing ? "Order updated" : "Order created");
       onSaved();
     } catch (e) {

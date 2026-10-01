@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useShopSettings } from "@/lib/shop-settings";
 import { useActiveStore } from "@/lib/active-store";
+import { useAccess, useDesignations } from "@/lib/permissions";
 
 
 const INACTIVITY_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -35,39 +36,38 @@ export const Route = createFileRoute("/_authenticated")({
   component: AppShell,
 });
 
-type Role = "admin" | "manager" | "cashier";
-type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; roles?: Role[] };
+type NavItem = { to: string; page: string; label: string; icon: typeof LayoutDashboard };
 type NavGroup = { group: string; items: NavItem[] };
 
 const NAV: NavGroup[] = [
   { group: "Overview", items: [
-    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/alerts", label: "Alerts", icon: AlertTriangle },
-    { to: "/documents", label: "Documents", icon: FileText },
+    { to: "/dashboard", page: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/alerts", page: "alerts", label: "Alerts", icon: AlertTriangle },
+    { to: "/documents", page: "documents", label: "Documents", icon: FileText },
   ] },
   { group: "Sales", items: [
-    { to: "/billing", label: "Billing", icon: ScanBarcode },
-    { to: "/day-book", label: "Day Book", icon: BookOpen },
-    { to: "/customers", label: "Customers", icon: Users },
-    { to: "/credit", label: "Credit", icon: HandCoins },
-    { to: "/reports", label: "Reports", icon: BarChart3, roles: ["admin", "manager"] },
-    { to: "/trends", label: "Trends", icon: TrendingUp, roles: ["admin", "manager"] },
+    { to: "/billing", page: "billing", label: "Billing", icon: ScanBarcode },
+    { to: "/day-book", page: "day-book", label: "Day Book", icon: BookOpen },
+    { to: "/customers", page: "customers", label: "Customers", icon: Users },
+    { to: "/credit", page: "credit", label: "Credit", icon: HandCoins },
+    { to: "/reports", page: "reports", label: "Reports", icon: BarChart3 },
+    { to: "/trends", page: "trends", label: "Trends", icon: TrendingUp },
   ] },
   { group: "Products", items: [
-    { to: "/products", label: "Products", icon: Package },
-    { to: "/inventory", label: "Inventory", icon: Boxes },
+    { to: "/products", page: "products", label: "Products", icon: Package },
+    { to: "/inventory", page: "inventory", label: "Inventory", icon: Boxes },
   ] },
   { group: "Purchases", items: [
-    { to: "/purchase-orders", label: "Purchase Orders", icon: ClipboardList, roles: ["admin", "manager"] },
-    { to: "/suppliers", label: "Suppliers", icon: Truck, roles: ["admin", "manager"] },
-    { to: "/expenses", label: "Expenses", icon: Wallet, roles: ["admin", "manager"] },
+    { to: "/purchase-orders", page: "purchase-orders", label: "Purchase Orders", icon: ClipboardList },
+    { to: "/suppliers", page: "suppliers", label: "Suppliers", icon: Truck },
+    { to: "/expenses", page: "expenses", label: "Expenses", icon: Wallet },
   ] },
   { group: "Employees", items: [
-    { to: "/staff", label: "Staff", icon: UserCog, roles: ["admin"] },
+    { to: "/staff", page: "staff", label: "Staff", icon: UserCog },
   ] },
   { group: "Branch settings", items: [
-    { to: "/devices", label: "Devices", icon: Printer },
-    { to: "/settings", label: "Settings", icon: SettingsIcon, roles: ["admin", "manager"] },
+    { to: "/devices", page: "devices", label: "Devices", icon: Printer },
+    { to: "/settings", page: "settings", label: "Settings", icon: SettingsIcon },
   ] },
 
 ];
@@ -77,6 +77,8 @@ function AppShell() {
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: roles } = useMyRoles();
+  const access = useAccess();
+  const { data: designations } = useDesignations();
   const { data: shop } = useShopSettings();
   const { storeId, store, stores, setStoreId } = useActiveStore();
   const [storePickerOpen, setStorePickerOpen] = useState(false);
@@ -195,7 +197,7 @@ function AppShell() {
         </div>
         <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
           {NAV.map((g) => {
-            const items = g.items.filter((n) => !n.roles || n.roles.some((r) => (roles ?? []).includes(r)));
+            const items = g.items.filter((n) => (access.isLoading ? true : access.can(n.page)));
             if (!items.length) return null;
             return (
               <div key={g.group} className="ml-3 pl-3 border-l border-sidebar-border/70 space-y-1">
@@ -231,7 +233,7 @@ function AppShell() {
             </div>
           )}
           <div className="px-3 py-2 text-xs text-sidebar-foreground/60">
-            Role: <span className="text-sidebar-foreground capitalize">{roles?.[0] ?? "—"}</span>
+            Role: <span className="text-sidebar-foreground">{(designations ?? []).find((d) => d.key === access.roleKeys[0])?.label ?? (roles?.[0] ?? "—")}</span>
           </div>
           <button
             onClick={signOut}
