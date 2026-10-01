@@ -15,8 +15,9 @@ import {
 } from "recharts";
 import {
   Receipt, Download, TrendingUp, PiggyBank, Package, Trophy, Snowflake, Users, CreditCard,
-  Percent, Undo2, Wallet, ShoppingCart, Boxes, AlertTriangle, UserRound, Printer,
+  Percent, Undo2, Wallet, ShoppingCart, Boxes, AlertTriangle, UserRound, Printer, ScrollText,
 } from "lucide-react";
+import { AREA_LABELS, LOG_AREAS, type ActivityLog } from "@/lib/activity-log";
 import { useMyRoles, canManage } from "@/hooks/use-role";
 import {
   type Preset, type Range, type Sale, type SaleItem, type Prod, type Summary,
@@ -91,6 +92,7 @@ function ReportsPage() {
           <TabsTrigger value="customers"><UserRound className="size-4" /> Customers</TabsTrigger>
           <TabsTrigger value="purchases"><ShoppingCart className="size-4" /> Purchases</TabsTrigger>
           <TabsTrigger value="inventory"><Snowflake className="size-4" /> Inventory</TabsTrigger>
+          <TabsTrigger value="logs"><ScrollText className="size-4" /> Logs</TabsTrigger>
           <TabsTrigger value="leaks"><AlertTriangle className="size-4" /> Profit leaks</TabsTrigger>
         </TabsList>
 
@@ -108,6 +110,7 @@ function ReportsPage() {
         <TabsContent value="purchases" className="mt-4"><PurchasesTab range={range} /></TabsContent>
         <TabsContent value="inventory" className="mt-4"><InventoryTab /></TabsContent>
         <TabsContent value="leaks" className="mt-4"><LeaksTab range={range} costing={costing} /></TabsContent>
+        <TabsContent value="logs" className="mt-4"><LogsTab /></TabsContent>
       </Tabs>
     </div>
   );
@@ -1477,3 +1480,121 @@ function exportGSTCSV(bills: Sale[], start: Date, end: Date) {
 
 /* re-exported for tabs that need typed products */
 export type { Prod, Summary };
+
+/* ================= activity logs ================= */
+
+function LogsTab() {
+  const storeId = useStoreId();
+  const today = ymd(new Date());
+  const [area, setArea] = useState<string>("all");
+  const [from, setFrom] = useState(ymd(new Date(Date.now() - 6 * 86400000)));
+  const [to, setTo] = useState(today);
+  const [search, setSearch] = useState("");
+
+  const q = useQuery({
+    queryKey: ["activity-logs", storeId, area, from, to],
+    queryFn: async () => {
+      let qb = supabase
+        .from("activity_logs")
+        .select("id,area,action,summary,entity_id,details,actor_id,actor_name,created_at")
+        .eq("store_id", storeId)
+        .gte("created_at", `${from}T00:00:00`)
+        .lte("created_at", `${to}T23:59:59`)
+        .order("created_at", { ascending: false })
+        .limit(1000);
+      if (area !== "all") qb = qb.eq("area", area);
+      const { data, error } = await qb;
+      if (error) throw error;
+      return (data ?? []) as ActivityLog[];
+    },
+  });
+
+  const rows = useMemo(() => {
+    const t = search.trim().toLowerCase();
+    if (!t) return q.data ?? [];
+    return (q.data ?? []).filter((l) =>
+      [l.actor_name, l.summary, l.action, AREA_LABELS[l.area] ?? l.area].join(" ").toLowerCase().includes(t));
+  }, [q.data, search]);
+
+  const counts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of q.data ?? []) m.set(l.area, (m.get(l.area) ?? 0) + 1);
+    return m;
+  }, [q.data]);
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-4 space-y-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <div className="text-xs text-muted-foreground mb-1">From</div>
+            <Input type="date" className="h-9 w-[150px]" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground mb-1">To</div>
+            <Input type="date" className="h-9 w-[150px]" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          <div className="flex-1 min-w-[220px]">
+            <div className="text-xs text-muted-foreground mb-1">Search (person, action, details)</div>
+            <Input className="h-9" placeholder="e.g. Shanid" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <Button variant="outline" size="sm" onClick={() => downloadCSV(`logs-${from}-to-${to}.csv`,
+            [["Date", "Log", "Action", "Person", "Details"], ...rows.map((l) => [
+              new Date(l.created_at).toLocaleString("en-IN"), AREA_LABELS[l.area] ?? l.area, l.action, l.actor_name ?? "", l.summary,
+            ])])}>
+            <Download className="size-4" /> Export
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setArea("all")}
+            className={`px-3 py-1.5 rounded-md text-xs border ${area === "all" ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"}`}
+          >
+            All logs
+          </button>
+          {LOG_AREAS.map((a) => (
+            <button
+              key={a}
+              type="button"
+              onClick={() => setArea(a)}
+              className={`px-3 py-1.5 rounded-md text-xs border ${area === a ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"}`}
+            >
+              {AREA_LABELS[a]}{area === "all" && counts.get(a) ? ` (${counts.get(a)})` : ""}
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="p-0 overflow-hidden">
+        {q.isLoading ? <div className="p-8 text-center text-sm text-muted-foreground">Loading…</div>
+          : !rows.length ? <div className="p-8 text-center text-sm text-muted-foreground">No activity recorded for this period.</div>
+          : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-left"><tr>
+                  <th className="px-4 py-2.5">Date &amp; time</th>
+                  <th className="px-4 py-2.5">Log</th>
+                  <th className="px-4 py-2.5">Action</th>
+                  <th className="px-4 py-2.5">Person</th>
+                  <th className="px-4 py-2.5">Details</th>
+                </tr></thead>
+                <tbody className="divide-y">
+                  {rows.map((l) => (
+                    <tr key={l.id}>
+                      <td className="px-4 py-2.5 whitespace-nowrap text-muted-foreground">{new Date(l.created_at).toLocaleString("en-IN")}</td>
+                      <td className="px-4 py-2.5"><span className="px-2 py-0.5 rounded-md bg-muted text-xs">{AREA_LABELS[l.area] ?? l.area}</span></td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{l.action}</td>
+                      <td className="px-4 py-2.5 font-medium">{l.actor_name ?? "—"}</td>
+                      <td className="px-4 py-2.5">{l.summary}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+      </Card>
+      <p className="text-xs text-muted-foreground">{rows.length} entry(ies). Logs are grouped by area — pick a log above to see only those entries.</p>
+    </div>
+  );
+}
