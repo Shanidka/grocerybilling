@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { logActivity } from "@/lib/activity-log";
 import { supabase } from "@/integrations/supabase/client";
 import { useStoreId } from "@/lib/active-store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -356,6 +357,7 @@ function PurchasesTab() {
       qc.invalidateQueries({ queryKey: ["suppliers"] });
     }
 
+    void logActivity("purchases", "create", `Purchase entry ${invoice || "(no invoice)"} from ${supplier || "unknown supplier"} — ${rows.length} item(s), ${total.toFixed(2)}`, { entityId: entry.id, details: { supplier, invoice_no: invoice, total, items: rows.length } });
     toast.success("Purchase recorded, stock updated");
     setOpen(false); setSupplier(""); setInvoice(""); setItems([]);
     qc.invalidateQueries({ queryKey: ["inv-purchases"] });
@@ -592,6 +594,7 @@ function AdjustmentsTab() {
     const { data: u } = await supabase.auth.getUser();
     const { error } = await supabase.from("stock_adjustments").insert({ product_id: pid, delta: Number(delta), reason, notes, created_by: u.user!.id });
     if (error) return toast.error(error.message);
+    void logActivity("stock", "adjust", `Stock adjustment ${Number(delta) > 0 ? "+" : ""}${Number(delta)} on ${products?.find((p) => p.id === pid)?.name ?? pid} (${reason})`, { entityId: pid, details: { delta: Number(delta), reason, notes } });
     toast.success("Adjustment saved");
     setOpen(false); setPid(""); setDelta(""); setNotes("");
     qc.invalidateQueries({ queryKey: ["inv-adjust"] });
@@ -675,6 +678,7 @@ function DamagedTab() {
     const { data: u } = await supabase.auth.getUser();
     const { error } = await supabase.from("damaged_products").insert({ product_id: pid, qty: Number(qty), reason, loss_value: Number(loss || 0), created_by: u.user!.id });
     if (error) return toast.error(error.message);
+    void logActivity("stock", "damage", `Damage ${Number(qty)} of ${products?.find((p) => p.id === pid)?.name ?? pid}`, { entityId: pid, details: { qty: Number(qty), reason, loss_value: Number(loss || 0) } });
     toast.success("Damage logged");
     setOpen(false); setPid(""); setQty("1"); setReason(""); setLoss("");
     qc.invalidateQueries({ queryKey: ["inv-damaged"] });
@@ -757,6 +761,7 @@ function ReturnsTab() {
     const { data: u } = await supabase.auth.getUser();
     const { error } = await supabase.from("product_returns").insert({ product_id: pid, qty: Number(qty), refund_amount: Number(refund || 0), reason, restock: restock === "true", created_by: u.user!.id });
     if (error) return toast.error(error.message);
+    void logActivity("stock", "return", `Return ${Number(qty)} of ${products?.find((p) => p.id === pid)?.name ?? pid}`, { entityId: pid, details: { qty: Number(qty), refund: Number(refund || 0), restock: restock === "true", reason } });
     toast.success("Return recorded");
     setOpen(false); setPid(""); setQty("1"); setRefund(""); setReason("");
     qc.invalidateQueries({ queryKey: ["inv-returns"] });
