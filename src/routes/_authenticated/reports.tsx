@@ -1539,9 +1539,9 @@ function LogsTab() {
             <Input className="h-9" placeholder="e.g. Shanid" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <Button variant="outline" size="sm" onClick={() => downloadCSV(`logs-${from}-to-${to}.csv`,
-            [["Date", "Log", "Action", "Person", "Details"], ...rows.map((l) => [
+            ["Date", "Log", "Action", "Person", "Details"], rows.map((l) => [
               new Date(l.created_at).toLocaleString("en-IN"), AREA_LABELS[l.area] ?? l.area, l.action, l.actor_name ?? "", l.summary,
-            ])])}>
+            ]))}>
             <Download className="size-4" /> Export
           </Button>
         </div>
