@@ -1,4 +1,4 @@
-# Print, WhatsApp share, and Back/Close buttons
+# Print, WhatsApp, Back/Close, store access, loose-item pricing, loyalty
 
 Nothing else in billing, stock, reports or settings changes.
 
@@ -32,7 +32,22 @@ Nothing else in billing, stock, reports or settings changes.
 - Staff see only their allowed stores in the store switcher. They can't open data from any other store.
 - Existing staff start with **All stores**, so nothing changes for them until you edit it.
 
+## 5. Smart stock for loose items (sugar, rice, dal)
+- Loose items keep **one selling price per kg** no matter what each purchase cost. A new purchase at a different buying price adds stock but never changes the selling price.
+- Each purchase's buying price is recorded, and the product shows its **average buying price** (weighted by quantity bought).
+- A new **Price averages** view in Reports shows average buying price and average selling price per product, grouped by **day, week, month or year**. It follows the report's date range.
+- Profit on loose items uses the average buying price at the time of sale.
+
+## 6. Customer loyalty program
+- Rules: every **Rs.100** spent earns **1 point**, and **10 points = Rs.1** off a bill.
+- Off by default. An admin or manager turns it on in Settings, where the earn and redeem rates can also be changed.
+- Only customers with a phone number can join. Each customer profile gets a **Loyalty** on/off switch and **Add to loyalty** button, plus their points balance and history.
+- At billing, entering a member's phone shows their points. The cashier can redeem points as a discount. Points are earned automatically when the bill is completed.
+- Points show on the printed and WhatsApp bill.
+
 ## Technical details
+- Migration: `products.avg_cost numeric`. Trigger on `purchase_items` insert recomputes the weighted average (`(stock*avg + qty*cost)/(stock+qty)`) and never touches `selling_price`/`price_per_kg`. Price-average report aggregates `purchase_items.cost` and `sale_items.unit_price` per period via date_trunc. `cost_at_sale` uses `avg_cost` when it's set.
+- Migration: `shop_settings.loyalty_enabled bool default false, loyalty_earn_per numeric default 100, loyalty_point_value numeric default 0.1`; `customers.loyalty_enabled bool default false, loyalty_points numeric default 0`; `loyalty_transactions(customer_id, sale_id, points, kind earn|redeem, store_id, created_by)` with GRANTs and RLS. `sales.points_redeemed`/`points_earned`. Points are applied in the billing flow, and in offline sync when the bill uploads.
 - Migration: `user_roles.all_stores boolean default true` plus a new `user_store_access(user_id, store_id)` table with GRANTs and RLS (admin/manager write, self read). Add a security-definer `can_access_store(uid, store_id)` and use it in the store_id-scoped SELECT/INSERT policies so access is enforced in the database, not only in the UI.
 - Server fn `setStaffStores` (admin/manager; managers are blocked on admin targets), and `listStaff` returns store access. Store switcher filters by the user's access.
 - New `src/lib/print-receipt.ts`: builds receipt HTML (same content as `generateReceipt`: MRP, savings, UPI/invoice QR, Billed by) and prints it through a hidden iframe with `@page { size: 80mm auto }`. `generateReceipt` stays for the PDF download.
