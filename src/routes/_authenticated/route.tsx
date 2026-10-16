@@ -1,7 +1,7 @@
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff, Package, Settings as SettingsIcon, AlertTriangle, BarChart3, Boxes, Users, Truck, UserCog, ClipboardList, Wallet, FileText, Store, Check, ChevronsUpDown, ChevronRight, BookOpen, HandCoins, TrendingUp, Printer } from "lucide-react";
+import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff, Package, Settings as SettingsIcon, AlertTriangle, BarChart3, Boxes, Users, Truck, UserCog, ClipboardList, Wallet, FileText, Store, Check, ChevronsUpDown, ChevronRight, ChevronLeft, BookOpen, HandCoins, TrendingUp, Printer } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useMyRoles } from "@/hooks/use-role";
@@ -265,6 +265,20 @@ function AppShell() {
           <div className="font-semibold">Bazaar POS</div>
         </header>
         <main className="flex-1 overflow-auto">
+          {pathname !== "/dashboard" && (
+            <div className="px-4 lg:px-6 pt-3 print:hidden">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (window.history.length > 1) router.history.back();
+                  else router.navigate({ to: "/dashboard" });
+                }}
+              >
+                <ChevronLeft className="size-4" /> Back
+              </Button>
+            </div>
+          )}
           <Outlet />
         </main>
       </div>
