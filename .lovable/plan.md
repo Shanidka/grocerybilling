@@ -26,7 +26,15 @@ Nothing else in billing, stock, reports or settings changes.
 - Every page, except Dashboard, gets a **← Back** button at the top. It returns to the page you came from, or to Dashboard if there isn't one.
 - Every alert, popup and notification gets a visible **×** Close button, including the low-stock alert, the dashboard alert banner and the pop-up messages.
 
+## 4. Store access per employee
+- On the Staff page, each person has a **Stores** setting: either **All stores** or a ticked list of specific stores. It applies to new and existing staff.
+- Admins and managers can change it at any time. Managers can't change an admin's store access.
+- Staff see only their allowed stores in the store switcher. They can't open data from any other store.
+- Existing staff start with **All stores**, so nothing changes for them until you edit it.
+
 ## Technical details
+- Migration: `user_roles.all_stores boolean default true` plus a new `user_store_access(user_id, store_id)` table with GRANTs and RLS (admin/manager write, self read). Add a security-definer `can_access_store(uid, store_id)` and use it in the store_id-scoped SELECT/INSERT policies so access is enforced in the database, not only in the UI.
+- Server fn `setStaffStores` (admin/manager; managers are blocked on admin targets), and `listStaff` returns store access. Store switcher filters by the user's access.
 - New `src/lib/print-receipt.ts`: builds receipt HTML (same content as `generateReceipt`: MRP, savings, UPI/invoice QR, Billed by) and prints it through a hidden iframe with `@page { size: 80mm auto }`. `generateReceipt` stays for the PDF download.
 - New `src/lib/bill-folder.ts`: `showDirectoryPicker` handle stored in IndexedDB. `generateReceipt` returns a Blob, which is written to the folder after `requestPermission`. Fallback is `showSaveFilePicker`, then the share sheet or a download.
 - `billing.tsx` CheckoutDialog: `mode: "none" | "print" | "share"` passed to `onCompleted`. ShareBillDialog gets an editable phone field, a Print button and a normalized `wa.me/91XXXXXXXXXX` link.
