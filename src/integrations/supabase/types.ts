@@ -171,6 +171,8 @@ export type Database = {
           created_at: string
           email: string | null
           id: string
+          loyalty_enabled: boolean
+          loyalty_points: number
           name: string
           notes: string | null
           phone: string | null
@@ -181,6 +183,8 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          loyalty_enabled?: boolean
+          loyalty_points?: number
           name: string
           notes?: string | null
           phone?: string | null
@@ -191,6 +195,8 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          loyalty_enabled?: boolean
+          loyalty_points?: number
           name?: string
           notes?: string | null
           phone?: string | null
@@ -401,6 +407,64 @@ export type Database = {
           },
         ]
       }
+      loyalty_transactions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          kind: string
+          note: string | null
+          points: number
+          sale_id: string | null
+          store_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          kind: string
+          note?: string | null
+          points: number
+          sale_id?: string | null
+          store_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          kind?: string
+          note?: string | null
+          points?: number
+          sale_id?: string | null
+          store_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_transactions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loyalty_transactions_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loyalty_transactions_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_returns: {
         Row: {
           created_at: string
@@ -454,6 +518,7 @@ export type Database = {
       }
       products: {
         Row: {
+          avg_cost: number | null
           barcode: string | null
           brand: string | null
           category_id: string | null
@@ -481,6 +546,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          avg_cost?: number | null
           barcode?: string | null
           brand?: string | null
           category_id?: string | null
@@ -508,6 +574,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          avg_cost?: number | null
           barcode?: string | null
           brand?: string | null
           category_id?: string | null
@@ -903,9 +970,12 @@ export type Database = {
           grand_total: number
           id: string
           line_discount: number
+          loyalty_discount: number
           notes: string | null
           paid_amount: number
           payment_mode: string
+          points_earned: number
+          points_redeemed: number
           status: string
           store_id: string | null
           subtotal: number
@@ -928,9 +998,12 @@ export type Database = {
           grand_total?: number
           id?: string
           line_discount?: number
+          loyalty_discount?: number
           notes?: string | null
           paid_amount?: number
           payment_mode?: string
+          points_earned?: number
+          points_redeemed?: number
           status?: string
           store_id?: string | null
           subtotal?: number
@@ -953,9 +1026,12 @@ export type Database = {
           grand_total?: number
           id?: string
           line_discount?: number
+          loyalty_discount?: number
           notes?: string | null
           paid_amount?: number
           payment_mode?: string
+          points_earned?: number
+          points_redeemed?: number
           status?: string
           store_id?: string | null
           subtotal?: number
@@ -1039,6 +1115,9 @@ export type Database = {
           created_at: string
           gst_number: string | null
           id: number
+          loyalty_earn_per: number
+          loyalty_enabled: boolean
+          loyalty_point_value: number
           phone: string | null
           receipt_footer: string | null
           shop_name: string
@@ -1050,6 +1129,9 @@ export type Database = {
           created_at?: string
           gst_number?: string | null
           id?: number
+          loyalty_earn_per?: number
+          loyalty_enabled?: boolean
+          loyalty_point_value?: number
           phone?: string | null
           receipt_footer?: string | null
           shop_name?: string
@@ -1061,11 +1143,35 @@ export type Database = {
           created_at?: string
           gst_number?: string | null
           id?: number
+          loyalty_earn_per?: number
+          loyalty_enabled?: boolean
+          loyalty_point_value?: number
           phone?: string | null
           receipt_footer?: string | null
           shop_name?: string
           updated_at?: string
           upi_id?: string | null
+        }
+        Relationships: []
+      }
+      staff_store_scope: {
+        Row: {
+          all_stores: boolean
+          store_ids: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          all_stores?: boolean
+          store_ids?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          all_stores?: boolean
+          store_ids?: string[]
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -1222,6 +1328,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_access_store: {
+        Args: { _store: string; _uid: string }
+        Returns: boolean
+      }
       cleanup_old_sales: { Args: never; Returns: undefined }
       has_role: {
         Args: {
