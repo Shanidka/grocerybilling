@@ -30,9 +30,12 @@ export interface ReceiptInput {
   grand: number;
   shop?: ShopInfo;
   invoice_url?: string;
+  loyalty?: { earned: number; redeemed: number; discount: number; balance?: number } | null;
 }
 
-export async function generateReceipt(r: ReceiptInput) {
+export type ReceiptOutput = "save" | "print" | "blob";
+
+export async function generateReceipt(r: ReceiptInput, output: ReceiptOutput = "save"): Promise<Blob | void> {
   const shop: ShopInfo = r.shop ?? { shop_name: "My Supermarket" };
 
   const invoiceQrPayload = r.invoice_url ?? JSON.stringify({
@@ -48,7 +51,7 @@ export async function generateReceipt(r: ReceiptInput) {
 
   const W = 80;
   const headerLines = 1 + (shop.address ? Math.ceil(shop.address.length / 36) : 0) + (shop.phone || shop.gst_number ? 1 : 0);
-  const H = 60 + headerLines * 4 + r.items.length * 8 + 70 + (payQr ? 36 : 0);
+  const H = (r.loyalty ? 14 : 0) + 60 + headerLines * 4 + r.items.length * 8 + 70 + (payQr ? 36 : 0);
   const doc = new jsPDF({ unit: "mm", format: [W, H] });
   let y = 8;
 
@@ -127,6 +130,7 @@ export async function generateReceipt(r: ReceiptInput) {
   if (r.taxTotal > 0) right("Tax", `Rs.${r.taxTotal.toFixed(2)}`);
   if (r.lineDiscount > 0) right("Item discount", `- Rs.${r.lineDiscount.toFixed(2)}`);
   if (r.billDisc > 0) right("Bill discount", `- Rs.${r.billDisc.toFixed(2)}`);
+  if (r.loyalty && r.loyalty.discount > 0) right(`Points redeemed (${r.loyalty.redeemed})`, `- Rs.${r.loyalty.discount.toFixed(2)}`);
   doc.line(4, y, W - 4, y); y += 4;
   right("TOTAL", `Rs.${r.grand.toFixed(2)}`, true);
   if (savings > 0) {
@@ -138,6 +142,10 @@ export async function generateReceipt(r: ReceiptInput) {
   }
   right("Paid", `Rs.${r.paid_amount.toFixed(2)}`);
   if (r.change_amount > 0) right("Change", `Rs.${r.change_amount.toFixed(2)}`);
+  if (r.loyalty) {
+    right("Points earned", `${r.loyalty.earned}`);
+    if (r.loyalty.balance != null) right("Points balance", `${r.loyalty.balance}`);
+  }
 
   y += 3;
   if (payQr) {
@@ -166,5 +174,28 @@ export async function generateReceipt(r: ReceiptInput) {
   }
   doc.setTextColor(0);
 
+  if (output === "blob") return doc.output("blob");
+  if (output === "print") {
+    doc.autoPrint();
+    printBlob(doc.output("blob"));
+    return;
+  }
   doc.save(`${r.bill_no}.pdf`);
 }
+
+/** Print a PDF blob in-page via a hidden iframe (no download). */
+export function printBlob(blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+  iframe.src = url;
+  iframe.onload = () => {
+    setTimeout(() => {
+      try { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); }
+      catch { window.open(url, "_blank"); }
+    }, 200);
+  };
+  document.body.appendChild(iframe);
+  setTimeout(() => { iframe.remove(); URL.revokeObjectURL(url); }, 120_000);
+}
+
