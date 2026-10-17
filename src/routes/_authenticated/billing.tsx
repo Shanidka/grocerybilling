@@ -13,7 +13,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScannerPanel } from "@/components/camera-scanner";
-import { CameraIcon, Plus, Minus, Trash2, Search, Pause, Play, Printer, IndianRupee, Loader2, ShoppingCart, QrCode, Share2, Copy, MessageCircle } from "lucide-react";
+import { CameraIcon, Plus, Minus, Trash2, Search, Pause, Play, Printer, IndianRupee, Loader2, ShoppingCart, QrCode, Share2, Copy, MessageCircle, Download } from "lucide-react";
 import { toast } from "sonner";
 import { inr } from "@/lib/format";
 import { generateReceipt, type ReceiptInput } from "@/lib/receipt";
@@ -590,6 +590,7 @@ function PaymentDialog({
 }) {
   const { data: shopBase } = useShopSettings();
   const { storeId, store } = useActiveStore();
+  const qc = useQueryClient();
   // Store-level identity overrides the organization defaults on receipts and UPI QR
   const shop = shopBase || store
     ? {
@@ -893,11 +894,28 @@ function PaymentDialog({
           </TabsContent>
         </Tabs>
 
-        <DialogFooter className="gap-2">
+        {loyaltyOn && member.data && (
+          <div className="rounded-md border p-3 space-y-2 text-sm">
+            <div className="flex justify-between"><span>Loyalty points</span><b className="tabular-nums">{member.data.points}</b></div>
+            <div className="flex gap-2 items-center">
+              <Input type="number" placeholder="Points to redeem" value={redeemPts} onChange={(e) => setRedeemPts(e.target.value)} className="h-9" />
+              <Button type="button" size="sm" variant="outline" onClick={() => setRedeemPts(String(maxRedeem))}>Max</Button>
+            </div>
+            {loyaltyDiscount > 0 && <div className="flex justify-between text-success"><span>Points discount</span><span>- {inr(loyaltyDiscount)}</span></div>}
+            <div className="text-xs text-muted-foreground">Will earn {earned} point(s) on this bill</div>
+          </div>
+        )}
+
+        <DialogFooter className="gap-2 flex-wrap sm:justify-end">
           <Button variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button onClick={complete} disabled={loading || insufficient} className="min-w-32">
-            {loading ? <Loader2 className="size-4 animate-spin" /> : <Printer className="size-4" />}
-            Complete & print
+          <Button variant="secondary" onClick={() => complete("none")} disabled={loading || insufficient}>
+            {loading ? <Loader2 className="size-4 animate-spin" /> : null} Complete
+          </Button>
+          <Button variant="secondary" onClick={() => complete("share")} disabled={loading || insufficient}>
+            <MessageCircle className="size-4" /> Complete & Share
+          </Button>
+          <Button onClick={() => complete("print")} disabled={loading || insufficient}>
+            <Printer className="size-4" /> Complete & Print
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -906,45 +924,71 @@ function PaymentDialog({
 }
 
 
-function ShareBillDialog({ info, onClose }: { info: { billNo: string; phone: string; total: number } | null; onClose: () => void }) {
+type CompleteAction = "none" | "print" | "share";
+type ShareInfo = { billNo: string; phone: string; total: number; receipt: ReceiptInput; autoPrinted?: boolean };
+
+function ShareBillDialog({ info, onClose }: { info: ShareInfo | null; onClose: () => void }) {
+  const [phone, setPhone] = useState("");
+  useEffect(() => { setPhone(info?.phone ?? ""); }, [info]);
   const url = info && typeof window !== "undefined" ? `${window.location.origin}/i/${info.billNo}` : "";
-  const msg = info ? `Your bill ${info.billNo} for ${inr(info.total)} — view: ${url}` : "";
-  const waNumber = info?.phone?.replace(/\D/g, "") ?? "";
-  const waLink = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
+  const r = info?.receipt;
+  const shopName = r?.shop?.shop_name || "our store";
+  const savings = r ? Math.max(0, r.items.reduce((s, it) => s + ((it.mrp ?? 0) > it.unit_price ? ((it.mrp ?? 0) - it.unit_price) * it.qty : 0), 0) + r.lineDiscount + r.billDisc) : 0;
+  const msg = info
+    ? [
+        `Thank you for shopping at ${shopName}!`,
+        `Bill: ${info.billNo}`,
+        `Total: Rs.${info.total.toFixed(2)}`,
+        savings > 0 ? `You saved: Rs.${savings.toFixed(2)}` : null,
+        r?.loyalty ? `Points earned: ${r.loyalty.earned}${r.loyalty.balance != null ? ` (balance ${r.loyalty.balance})` : ""}` : null,
+        `View bill: ${url}`,
+      ].filter(Boolean).join("\n")
+    : "";
+  const num = waNumber(phone);
+  const sendWhatsApp = () => {
+    if (!num) return toast.error("Enter a valid 10-digit mobile number");
+    window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank", "noopener");
+  };
+  const savePdf = async () => {
+    if (!r) return;
+    const blob = (await generateReceipt(r, "blob")) as Blob;
+    const where = await saveBillFile(blob, `${r.bill_no}.pdf`);
+    if (where !== "cancelled") toast.success(where === "download" ? "Saved to Downloads" : where === "share" ? "Shared" : `Saved to ${where}`);
+  };
   return (
     <Dialog open={!!info} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Share bill with customer</DialogTitle>
-          <DialogDescription>Bill <b>{info?.billNo}</b> · {info ? inr(info.total) : ""}</DialogDescription>
+          <DialogTitle>Bill {info?.billNo}</DialogTitle>
+          <DialogDescription>Total {info ? inr(info.total) : ""}{info?.autoPrinted ? " · sent to printer" : ""}</DialogDescription>
         </DialogHeader>
-        <div className="space-y-2">
-          <div className="rounded-md border p-2 text-xs font-mono break-all bg-muted">{url}</div>
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs">Customer WhatsApp number</Label>
+            <div className="flex gap-2">
+              <Input inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="10-digit mobile" onKeyDown={(e) => e.key === "Enter" && sendWhatsApp()} />
+              <Button onClick={sendWhatsApp}><MessageCircle className="size-4" /> Send</Button>
+            </div>
+            {phone && !num && <p className="text-xs text-destructive mt-1">Number looks wrong.</p>}
+          </div>
           <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={() => r && generateReceipt(r, "print")}><Printer className="size-4" /> Print</Button>
+            <Button variant="outline" onClick={savePdf}><Download className="size-4" /> Save PDF</Button>
             <Button variant="outline" onClick={() => { navigator.clipboard?.writeText(url); toast.success("Link copied"); }}>
               <Copy className="size-4" /> Copy link
             </Button>
             <Button
               variant="outline"
-              onClick={() => window.open(waLink, "_blank", "noopener")}
-              title={waNumber ? "Send on WhatsApp" : "Pick a contact in WhatsApp"}
-            >
-              <MessageCircle className="size-4" /> WhatsApp
-            </Button>
-            <Button
-              variant="outline"
-              className="col-span-2"
               onClick={async () => {
                 if (navigator.share) {
-                  try { await navigator.share({ title: `Bill ${info?.billNo}`, text: msg, url }); }
+                  try { await navigator.share({ title: `Bill ${info?.billNo}`, text: msg }); }
                   catch { /* user cancelled */ }
-                } else { navigator.clipboard?.writeText(url); toast.success("Link copied"); }
+                } else { navigator.clipboard?.writeText(msg); toast.success("Copied"); }
               }}
             >
               <Share2 className="size-4" /> Share…
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">SMS gateway can be wired up later; use WhatsApp or share-sheet for now.</p>
         </div>
         <DialogFooter>
           <Button onClick={onClose}>Done</Button>
