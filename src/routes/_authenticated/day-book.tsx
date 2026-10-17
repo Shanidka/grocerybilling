@@ -7,6 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { inr } from "@/lib/format";
+import { reprintSale } from "@/lib/reprint";
+import { toast } from "sonner";
 import { BookOpen, Printer } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/day-book")({
@@ -107,7 +109,7 @@ function DayBook() {
               <thead className="bg-muted/50 text-left"><tr>
                 <th className="px-4 py-2.5">Date & time</th><th className="px-4 py-2.5">Bill</th><th className="px-4 py-2.5">Customer</th>
                 <th className="px-4 py-2.5">Mode</th>
-                <th className="px-4 py-2.5 text-right">Credit</th><th className="px-4 py-2.5 text-right">Total</th>
+                <th className="px-4 py-2.5 text-right">Credit</th><th className="px-4 py-2.5 text-right">Total</th><th className="print:hidden"></th>
               </tr></thead>
               <tbody className="divide-y">{sales.data.map((r) => (
                 <tr key={r.id}>
@@ -117,12 +119,13 @@ function DayBook() {
                   <td className="px-4 py-2.5 capitalize">{r.payment_mode}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{Number(r.credit_amount) > 0 ? inr(r.credit_amount) : "—"}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums font-medium">{inr(r.grand_total)}</td>
+                  <td className="px-2 py-1.5 print:hidden"><Button size="icon" variant="ghost" title="Print bill" onClick={() => reprintSale(r.id).catch((e) => toast.error(e?.message ?? "Print failed"))}><Printer className="size-4" /></Button></td>
                 </tr>
               ))}</tbody>
               <tfoot><tr className="border-t bg-muted/30 font-semibold">
                 <td className="px-4 py-2.5" colSpan={4}>Total</td>
                 <td className="px-4 py-2.5 text-right tabular-nums">{inr(t.credit)}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums">{inr(t.gross)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums">{inr(t.gross)}</td><td className="print:hidden"></td>
               </tr></tfoot>
             </table>
           </div>
