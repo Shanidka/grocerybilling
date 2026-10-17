@@ -13,10 +13,11 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScannerPanel } from "@/components/camera-scanner";
-import { CameraIcon, Plus, Minus, Trash2, Search, Pause, Play, Printer, IndianRupee, Loader2, ShoppingCart, QrCode, Share2, Copy, MessageCircle } from "lucide-react";
+import { CameraIcon, Plus, Minus, Trash2, Search, Pause, Play, Printer, IndianRupee, Loader2, ShoppingCart, QrCode, Share2, Copy, MessageCircle, Download } from "lucide-react";
 import { toast } from "sonner";
 import { inr } from "@/lib/format";
-import { generateReceipt } from "@/lib/receipt";
+import { generateReceipt, type ReceiptInput } from "@/lib/receipt";
+import { saveBillFile, waNumber } from "@/lib/bill-folder";
 import { useShopSettings, parseScaleBarcode } from "@/lib/shop-settings";
 import { useStoreId, useActiveStore } from "@/lib/active-store";
 import { makeClientUid, makeOfflineBillNo, queueSale, adjustCachedStock, syncOfflineSales, pendingCount } from "@/lib/offline-sales";
@@ -72,7 +73,7 @@ function Billing() {
   const [scanOpen, setScanOpen] = useState(false);
   const [recallOpen, setRecallOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
-  const [shareInfo, setShareInfo] = useState<{ billNo: string; phone: string; total: number } | null>(null);
+  const [shareInfo, setShareInfo] = useState<ShareInfo | null>(null);
   const [search, setSearch] = useState("");
   const [highlight, setHighlight] = useState(0);
   const [matchPick, setMatchPick] = useState<Product[] | null>(null);
@@ -533,8 +534,9 @@ function Billing() {
         cart={cart}
         customerName={customerName}
         customerPhone={customerPhone}
-        onCompleted={(billNo, phone, total) => {
-          setShareInfo({ billNo, phone, total });
+        onCompleted={(billNo, phone, total, receipt, action) => {
+          if (action === "print") void generateReceipt(receipt, "print");
+          if (action !== "none") setShareInfo({ billNo, phone, total, receipt, autoPrinted: action === "print" });
           clearCart();
           qc.invalidateQueries({ queryKey: ["billing-products"] });
         }}
@@ -584,10 +586,11 @@ function PaymentDialog({
   open: boolean; onClose: () => void;
   totals: { subtotal: number; lineDisc: number; taxTotal: number; billDisc: number; grand: number };
   cart: CartLine[]; customerName: string; customerPhone: string;
-  onCompleted: (billNo: string, phone: string, total: number) => void;
+  onCompleted: (billNo: string, phone: string, total: number, receipt: ReceiptInput, action: CompleteAction) => void;
 }) {
   const { data: shopBase } = useShopSettings();
   const { storeId, store } = useActiveStore();
+  const qc = useQueryClient();
   // Store-level identity overrides the organization defaults on receipts and UPI QR
   const shop = shopBase || store
     ? {
@@ -606,40 +609,60 @@ function PaymentDialog({
   // Split / credit
   const [sCash, setSCash] = useState(""); const [sCard, setSCard] = useState("");
   const [sUpi, setSUpi] = useState(""); const [sCredit, setSCredit] = useState("");
+  // Loyalty
+  const loyaltyOn = !!shopBase?.loyalty_enabled;
+  const earnPer = Number(shopBase?.loyalty_earn_per ?? 100) || 100;
+  const pointValue = Number(shopBase?.loyalty_point_value ?? 0.1) || 0.1;
+  const phoneKey = customerPhone.trim();
+  const member = useQuery({
+    enabled: open && loyaltyOn && phoneKey.length >= 10,
+    queryKey: ["loyalty-member", storeId, phoneKey],
+    queryFn: async () => {
+      const { data } = await supabase.from("customers").select("id,name,loyalty_enabled,loyalty_points")
+        .eq("store_id", storeId).eq("phone", phoneKey).maybeSingle();
+      return data && data.loyalty_enabled ? { id: data.id, points: Number(data.loyalty_points) || 0 } : null;
+    },
+  });
+  const [redeemPts, setRedeemPts] = useState("");
+  const maxRedeem = member.data ? Math.min(member.data.points, Math.floor(totals.grand / pointValue)) : 0;
+  const redeem = Math.max(0, Math.min(Math.floor(Number(redeemPts) || 0), maxRedeem));
+  const loyaltyDiscount = Math.round(redeem * pointValue * 100) / 100;
+  const due = Math.round((totals.grand - loyaltyDiscount) * 100) / 100;
+  const earned = member.data ? Math.floor(due / earnPer) : 0;
 
   useEffect(() => {
     if (!open) {
       setMode("cash"); setPaid(""); setUpiQr(null);
-      setSCash(""); setSCard(""); setSUpi(""); setSCredit("");
-    } else setPaid(totals.grand.toFixed(2));
-  }, [open, totals.grand]);
+      setSCash(""); setSCard(""); setSUpi(""); setSCredit(""); setRedeemPts("");
+    } else setPaid(due.toFixed(2));
+  }, [open, due]);
 
   useEffect(() => {
     if (mode === "upi" || mode === "qr" || mode === "split") {
       const pa = shop?.upi_id || "merchant@upi";
       const pn = encodeURIComponent(shop?.shop_name || "Supermarket");
-      const amt = mode === "split" ? Number(sUpi || 0) : totals.grand;
+      const amt = mode === "split" ? Number(sUpi || 0) : due;
       if (amt <= 0) { setUpiQr(null); return; }
       const upi = `upi://pay?pa=${pa}&pn=${pn}&am=${amt.toFixed(2)}&cu=INR&tn=Bill`;
       QRCode.toDataURL(upi, { width: 220, margin: 1 }).then(setUpiQr).catch(() => setUpiQr(null));
     } else setUpiQr(null);
-  }, [mode, totals.grand, sUpi, shop?.upi_id, shop?.shop_name]);
+  }, [mode, due, sUpi, shop?.upi_id, shop?.shop_name]);
 
   const splitCash = Number(sCash) || 0, splitCard = Number(sCard) || 0;
   const splitUpi = Number(sUpi) || 0, splitCredit = Number(sCredit) || 0;
   const splitPaid = splitCash + splitCard + splitUpi;
   const splitCovered = splitPaid + splitCredit;
-  const splitRemaining = Math.round((totals.grand - splitCovered) * 100) / 100;
+  const splitRemaining = Math.round((due - splitCovered) * 100) / 100;
 
   const paidNum = Number(paid) || 0;
   const change = mode === "split"
-    ? Math.max(0, splitCovered - totals.grand)
-    : Math.max(0, paidNum - totals.grand);
+    ? Math.max(0, splitCovered - due)
+    : Math.max(0, paidNum - due);
   const insufficient = mode === "split"
     ? splitRemaining > 0.01 || (splitCredit > 0 && !customerName.trim() && !customerPhone.trim())
-    : mode === "cash" && paidNum < totals.grand;
+    : mode === "cash" && paidNum < due;
 
-  const complete = async () => {
+  const complete = async (action: CompleteAction) => {
     setLoading(true);
     try {
       const { data: sess } = await supabase.auth.getSession();
@@ -654,9 +677,9 @@ function PaymentDialog({
       const split = mode === "split"
         ? { amount_cash: splitCash, amount_card: splitCard, amount_upi: splitUpi, amount_other: 0, credit_amount: splitCredit, paid_amount: splitPaid }
         : {
-            amount_cash: mode === "cash" ? Math.min(paidNum, totals.grand) : 0,
-            amount_card: mode === "card" ? totals.grand : 0,
-            amount_upi: mode === "upi" || mode === "qr" ? totals.grand : 0,
+            amount_cash: mode === "cash" ? Math.min(paidNum, due) : 0,
+            amount_card: mode === "card" ? due : 0,
+            amount_upi: mode === "upi" || mode === "qr" ? due : 0,
             amount_other: 0,
             credit_amount: 0,
             paid_amount: paidNum,
@@ -671,10 +694,13 @@ function PaymentDialog({
         tax_total: totals.taxTotal,
         line_discount: totals.lineDisc,
         bill_discount: totals.billDisc,
-        grand_total: totals.grand,
+        grand_total: due,
         payment_mode: mode,
         change_amount: change,
         status: mode === "split" && splitCredit > 0 ? "credit" : "completed",
+        points_earned: earned,
+        points_redeemed: redeem,
+        loyalty_discount: loyaltyDiscount,
         ...split,
       };
       const itemRows = cart.map((l) => ({
@@ -689,6 +715,7 @@ function PaymentDialog({
       }));
 
       let bill_no = "";
+      let saleId: string | null = null;
       let created_at = new Date().toISOString();
       let offline = typeof navigator !== "undefined" && !navigator.onLine;
 
@@ -704,6 +731,7 @@ function PaymentDialog({
             .single();
           if (saleErr) throw saleErr;
           created_at = saleRow.created_at;
+          saleId = saleRow.id;
           const { error: itemsErr } = await supabase
             .from("sale_items")
             .insert(itemRows.map((i) => ({ ...i, sale_id: saleRow.id })) as never);
@@ -723,8 +751,22 @@ function PaymentDialog({
         toast.warning(`Saved offline as ${bill_no} — will sync automatically`);
       }
 
+      // Loyalty points (online only)
+      let loyaltyBalance: number | undefined;
+      if (!offline && member.data && (earned > 0 || redeem > 0)) {
+        try {
+          const rows = [
+            ...(redeem > 0 ? [{ customer_id: member.data.id, sale_id: saleId, store_id: storeId, kind: "redeem", points: redeem, created_by: uid }] : []),
+            ...(earned > 0 ? [{ customer_id: member.data.id, sale_id: saleId, store_id: storeId, kind: "earn", points: earned, created_by: uid }] : []),
+          ];
+          await supabase.from("loyalty_transactions").insert(rows);
+          loyaltyBalance = Math.max(0, member.data.points - redeem) + earned;
+          qc.invalidateQueries({ queryKey: ["loyalty-member"] });
+        } catch { /* non-blocking */ }
+      }
+
       const invoice_url = !offline && typeof window !== "undefined" ? `${window.location.origin}/i/${bill_no}` : undefined;
-      await generateReceipt({
+      const receipt: ReceiptInput = {
         bill_no, created_at,
         cashier_name: billerName || undefined,
         customer_name: customerName, customer_phone: customerPhone,
@@ -739,13 +781,14 @@ function PaymentDialog({
           line_discount: l.discount, line_total: l.unit_price * l.qty - l.discount, mrp: l.mrp,
         })),
         subtotal: totals.subtotal, taxTotal: totals.taxTotal,
-        lineDiscount: totals.lineDisc, billDisc: totals.billDisc, grand: totals.grand,
+        lineDiscount: totals.lineDisc, billDisc: totals.billDisc, grand: due,
         invoice_url,
         shop: shop ? {
           shop_name: shop.shop_name, phone: shop.phone, address: shop.address,
           gst_number: shop.gst_number, upi_id: shop.upi_id, receipt_footer: shop.receipt_footer,
         } : undefined,
-      });
+        loyalty: member.data ? { earned, redeemed: redeem, discount: loyaltyDiscount, balance: loyaltyBalance } : null,
+      };
 
       // Persist customer details to the directory (store-scoped, de-duped by phone)
       if (!offline && (customerName.trim() || customerPhone.trim())) {
@@ -765,9 +808,9 @@ function PaymentDialog({
         } catch { /* non-blocking */ }
       }
 
-      void logActivity("billing", offline ? "sale-offline" : "sale", `Bill ${bill_no} — ${cart.length} item(s), total ${totals.grand.toFixed(2)} (${mode})`, { entityId: bill_no, details: { total: totals.grand, items: cart.length, payment_mode: mode, customer: customerName || null, offline } });
+      void logActivity("billing", offline ? "sale-offline" : "sale", `Bill ${bill_no} — ${cart.length} item(s), total ${due.toFixed(2)} (${mode})`, { entityId: bill_no, details: { total: due, items: cart.length, payment_mode: mode, customer: customerName || null, offline } });
       if (!offline) toast.success(`Bill ${bill_no} completed`);
-      onCompleted(bill_no, customerPhone, totals.grand);
+      onCompleted(bill_no, customerPhone, due, receipt, action);
       onClose();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to complete");
@@ -776,14 +819,14 @@ function PaymentDialog({
     }
   };
 
-  const quickPaid = [totals.grand, Math.ceil(totals.grand / 100) * 100, Math.ceil(totals.grand / 500) * 500];
+  const quickPaid = [due, Math.ceil(due / 100) * 100, Math.ceil(due / 500) * 500];
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !loading && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Collect payment</DialogTitle>
-          <DialogDescription>Total due <span className="font-semibold text-foreground">{inr(totals.grand)}</span></DialogDescription>
+          <DialogDescription>Total due <span className="font-semibold text-foreground">{inr(due)}</span></DialogDescription>
         </DialogHeader>
 
         <Tabs value={mode} onValueChange={setMode}>
@@ -822,7 +865,7 @@ function PaymentDialog({
           {(["upi", "qr"] as const).map((m) => (
             <TabsContent key={m} value={m} className="pt-4 text-center space-y-2">
               {upiQr ? <img src={upiQr} alt="UPI QR" className="mx-auto rounded-md border" /> : <div className="h-[220px] grid place-items-center"><QrCode className="size-12 text-muted-foreground" /></div>}
-              <p className="text-sm font-medium">Pay {inr(totals.grand)} to {shop?.shop_name ?? "shop"}</p>
+              <p className="text-sm font-medium">Pay {inr(due)} to {shop?.shop_name ?? "shop"}</p>
               <p className="text-xs text-muted-foreground">Scan with any UPI app{shop?.upi_id ? ` · ${shop.upi_id}` : ""}</p>
 
             </TabsContent>
@@ -851,11 +894,28 @@ function PaymentDialog({
           </TabsContent>
         </Tabs>
 
-        <DialogFooter className="gap-2">
+        {loyaltyOn && member.data && (
+          <div className="rounded-md border p-3 space-y-2 text-sm">
+            <div className="flex justify-between"><span>Loyalty points</span><b className="tabular-nums">{member.data.points}</b></div>
+            <div className="flex gap-2 items-center">
+              <Input type="number" placeholder="Points to redeem" value={redeemPts} onChange={(e) => setRedeemPts(e.target.value)} className="h-9" />
+              <Button type="button" size="sm" variant="outline" onClick={() => setRedeemPts(String(maxRedeem))}>Max</Button>
+            </div>
+            {loyaltyDiscount > 0 && <div className="flex justify-between text-success"><span>Points discount</span><span>- {inr(loyaltyDiscount)}</span></div>}
+            <div className="text-xs text-muted-foreground">Will earn {earned} point(s) on this bill</div>
+          </div>
+        )}
+
+        <DialogFooter className="gap-2 flex-wrap sm:justify-end">
           <Button variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button onClick={complete} disabled={loading || insufficient} className="min-w-32">
-            {loading ? <Loader2 className="size-4 animate-spin" /> : <Printer className="size-4" />}
-            Complete & print
+          <Button variant="secondary" onClick={() => complete("none")} disabled={loading || insufficient}>
+            {loading ? <Loader2 className="size-4 animate-spin" /> : null} Complete
+          </Button>
+          <Button variant="secondary" onClick={() => complete("share")} disabled={loading || insufficient}>
+            <MessageCircle className="size-4" /> Complete & Share
+          </Button>
+          <Button onClick={() => complete("print")} disabled={loading || insufficient}>
+            <Printer className="size-4" /> Complete & Print
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -864,45 +924,71 @@ function PaymentDialog({
 }
 
 
-function ShareBillDialog({ info, onClose }: { info: { billNo: string; phone: string; total: number } | null; onClose: () => void }) {
+type CompleteAction = "none" | "print" | "share";
+type ShareInfo = { billNo: string; phone: string; total: number; receipt: ReceiptInput; autoPrinted?: boolean };
+
+function ShareBillDialog({ info, onClose }: { info: ShareInfo | null; onClose: () => void }) {
+  const [phone, setPhone] = useState("");
+  useEffect(() => { setPhone(info?.phone ?? ""); }, [info]);
   const url = info && typeof window !== "undefined" ? `${window.location.origin}/i/${info.billNo}` : "";
-  const msg = info ? `Your bill ${info.billNo} for ${inr(info.total)} — view: ${url}` : "";
-  const waNumber = info?.phone?.replace(/\D/g, "") ?? "";
-  const waLink = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
+  const r = info?.receipt;
+  const shopName = r?.shop?.shop_name || "our store";
+  const savings = r ? Math.max(0, r.items.reduce((s, it) => s + ((it.mrp ?? 0) > it.unit_price ? ((it.mrp ?? 0) - it.unit_price) * it.qty : 0), 0) + r.lineDiscount + r.billDisc) : 0;
+  const msg = info
+    ? [
+        `Thank you for shopping at ${shopName}!`,
+        `Bill: ${info.billNo}`,
+        `Total: Rs.${info.total.toFixed(2)}`,
+        savings > 0 ? `You saved: Rs.${savings.toFixed(2)}` : null,
+        r?.loyalty ? `Points earned: ${r.loyalty.earned}${r.loyalty.balance != null ? ` (balance ${r.loyalty.balance})` : ""}` : null,
+        `View bill: ${url}`,
+      ].filter(Boolean).join("\n")
+    : "";
+  const num = waNumber(phone);
+  const sendWhatsApp = () => {
+    if (!num) return toast.error("Enter a valid 10-digit mobile number");
+    window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank", "noopener");
+  };
+  const savePdf = async () => {
+    if (!r) return;
+    const blob = (await generateReceipt(r, "blob")) as Blob;
+    const where = await saveBillFile(blob, `${r.bill_no}.pdf`);
+    if (where !== "cancelled") toast.success(where === "download" ? "Saved to Downloads" : where === "share" ? "Shared" : `Saved to ${where}`);
+  };
   return (
     <Dialog open={!!info} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Share bill with customer</DialogTitle>
-          <DialogDescription>Bill <b>{info?.billNo}</b> · {info ? inr(info.total) : ""}</DialogDescription>
+          <DialogTitle>Bill {info?.billNo}</DialogTitle>
+          <DialogDescription>Total {info ? inr(info.total) : ""}{info?.autoPrinted ? " · sent to printer" : ""}</DialogDescription>
         </DialogHeader>
-        <div className="space-y-2">
-          <div className="rounded-md border p-2 text-xs font-mono break-all bg-muted">{url}</div>
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs">Customer WhatsApp number</Label>
+            <div className="flex gap-2">
+              <Input inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="10-digit mobile" onKeyDown={(e) => e.key === "Enter" && sendWhatsApp()} />
+              <Button onClick={sendWhatsApp}><MessageCircle className="size-4" /> Send</Button>
+            </div>
+            {phone && !num && <p className="text-xs text-destructive mt-1">Number looks wrong.</p>}
+          </div>
           <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={() => r && generateReceipt(r, "print")}><Printer className="size-4" /> Print</Button>
+            <Button variant="outline" onClick={savePdf}><Download className="size-4" /> Save PDF</Button>
             <Button variant="outline" onClick={() => { navigator.clipboard?.writeText(url); toast.success("Link copied"); }}>
               <Copy className="size-4" /> Copy link
             </Button>
             <Button
               variant="outline"
-              onClick={() => window.open(waLink, "_blank", "noopener")}
-              title={waNumber ? "Send on WhatsApp" : "Pick a contact in WhatsApp"}
-            >
-              <MessageCircle className="size-4" /> WhatsApp
-            </Button>
-            <Button
-              variant="outline"
-              className="col-span-2"
               onClick={async () => {
                 if (navigator.share) {
-                  try { await navigator.share({ title: `Bill ${info?.billNo}`, text: msg, url }); }
+                  try { await navigator.share({ title: `Bill ${info?.billNo}`, text: msg }); }
                   catch { /* user cancelled */ }
-                } else { navigator.clipboard?.writeText(url); toast.success("Link copied"); }
+                } else { navigator.clipboard?.writeText(msg); toast.success("Copied"); }
               }}
             >
               <Share2 className="size-4" /> Share…
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">SMS gateway can be wired up later; use WhatsApp or share-sheet for now.</p>
         </div>
         <DialogFooter>
           <Button onClick={onClose}>Done</Button>

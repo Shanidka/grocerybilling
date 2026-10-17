@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { useShopSettings } from "@/lib/shop-settings";
 import { Plus, Search, Pencil, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/customers")({
@@ -18,7 +20,7 @@ export const Route = createFileRoute("/_authenticated/customers")({
   head: () => ({ meta: [{ title: "Customers — Bazaar POS" }] }),
 });
 
-type Customer = { id: string; name: string; phone: string | null; email: string | null; notes: string | null };
+type Customer = { id: string; name: string; phone: string | null; email: string | null; notes: string | null; loyalty_enabled: boolean; loyalty_points: number };
 
 function CustomersPage() {
   const qc = useQueryClient();
@@ -53,6 +55,14 @@ function CustomersPage() {
     toast.success(editing ? "Updated" : "Added");
     setOpen(false); qc.invalidateQueries({ queryKey: ["customers"] });
   };
+  const { data: shop } = useShopSettings();
+  const toggleLoyalty = async (c: Customer, v: boolean) => {
+    if (v && !(c.phone ?? "").replace(/\D/g, "")) return toast.error("Add a phone number first — only customers with a phone can join");
+    const { error } = await supabase.from("customers").update({ loyalty_enabled: v }).eq("id", c.id);
+    if (error) return toast.error(error.message);
+    toast.success(v ? `${c.name} added to loyalty` : "Removed from loyalty");
+    qc.invalidateQueries({ queryKey: ["customers"] });
+  };
   const remove = async (c: Customer) => {
     if (!confirm(`Delete ${c.name}?`)) return;
     const { error } = await supabase.from("customers").delete().eq("id", c.id);
@@ -65,7 +75,7 @@ function CustomersPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Customers</h1>
-          <p className="text-sm text-muted-foreground">Directory of customer contacts.</p>
+          <p className="text-sm text-muted-foreground">Directory of customer contacts.{!shop?.loyalty_enabled && " Loyalty program is off — turn it on in Settings."}</p>
         </div>
         <Button onClick={openNew}><Plus className="size-4" /> Add customer</Button>
       </div>
@@ -80,13 +90,20 @@ function CustomersPage() {
       <Card className="p-0 overflow-hidden">
         {!filtered.length ? <div className="p-8 text-center text-sm text-muted-foreground">No customers.</div> : (
           <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left"><tr><th className="px-4 py-2.5">Name</th><th className="px-4 py-2.5">Phone</th><th className="px-4 py-2.5">Email</th><th className="px-4 py-2.5">Notes</th><th></th></tr></thead>
+            <thead className="bg-muted/50 text-left"><tr><th className="px-4 py-2.5">Name</th><th className="px-4 py-2.5">Phone</th><th className="px-4 py-2.5">Email</th><th className="px-4 py-2.5">Notes</th><th className="px-4 py-2.5">Loyalty</th><th></th></tr></thead>
             <tbody className="divide-y">{filtered.map((c) => (
               <tr key={c.id}>
                 <td className="px-4 py-3 font-medium">{c.name}</td>
                 <td className="px-4 py-3">{c.phone ?? "—"}</td>
                 <td className="px-4 py-3 text-muted-foreground">{c.email ?? "—"}</td>
                 <td className="px-4 py-3 text-muted-foreground truncate max-w-xs">{c.notes ?? "—"}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <Switch checked={c.loyalty_enabled} onCheckedChange={(v) => toggleLoyalty(c, v)} disabled={!c.phone} title={c.phone ? "" : "Needs phone number"} />
+                    {c.loyalty_enabled ? <span className="text-xs tabular-nums">{Number(c.loyalty_points)} pts</span>
+                      : c.phone ? <Button size="sm" variant="link" className="h-auto p-0 text-xs" onClick={() => toggleLoyalty(c, true)}>Add to loyalty</Button> : null}
+                  </div>
+                </td>
                 <td className="px-4 py-3 text-right">
                   <Button size="icon" variant="ghost" onClick={() => openEdit(c)}><Pencil className="size-4" /></Button>
                   <Button size="icon" variant="ghost" className="text-destructive" onClick={() => remove(c)}><Trash2 className="size-4" /></Button>

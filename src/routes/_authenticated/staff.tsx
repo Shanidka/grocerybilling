@@ -14,7 +14,8 @@ import { toast } from "sonner";
 import { Plus, Trash2, Pencil } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAccess, useDesignations, useRolePermissions, PAGES, type AppRoleRow } from "@/lib/permissions";
-import { listStaff, createStaff, setStaffRole, deleteStaff } from "@/lib/staff.functions";
+import { listStaff, createStaff, setStaffRole, deleteStaff, setStaffStores } from "@/lib/staff.functions";
+import { useStores } from "@/lib/active-store";
 import { logActivity } from "@/lib/activity-log";
 
 export const Route = createFileRoute("/_authenticated/staff")({
@@ -123,7 +124,7 @@ function PeopleTab({ isAdmin, enabled }: { isAdmin: boolean; enabled: boolean })
           : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-muted/50 text-left"><tr><th className="px-4 py-2.5">Name</th><th className="px-4 py-2.5">Email</th><th className="px-4 py-2.5">Role</th><th className="px-4 py-2.5">Added</th><th className="px-4 py-2.5"></th></tr></thead>
+                <thead className="bg-muted/50 text-left"><tr><th className="px-4 py-2.5">Name</th><th className="px-4 py-2.5">Email</th><th className="px-4 py-2.5">Role</th><th className="px-4 py-2.5">Stores</th><th className="px-4 py-2.5">Added</th><th className="px-4 py-2.5"></th></tr></thead>
                 <tbody className="divide-y">
                   {q.data.map((u) => (
                     <tr key={u.id}>
@@ -137,6 +138,10 @@ function PeopleTab({ isAdmin, enabled }: { isAdmin: boolean; enabled: boolean })
                           </Select>
                         ) : <span>{labelOf(u.role_key)}</span>}
                       </td>
+                      <td className="px-4 py-3">
+                        {u.base_role === "admin" ? <span className="text-xs text-muted-foreground">All stores</span>
+                          : <StoreAccessCell userId={u.id} allStores={u.all_stores} storeIds={u.store_ids} />}
+                      </td>
                       <td className="px-4 py-3 text-muted-foreground">{new Date(u.created_at).toLocaleDateString("en-IN")}</td>
                       <td className="px-4 py-3 text-right">
                         {isAdmin && <Button size="icon" variant="ghost" className="text-destructive" onClick={() => remove(u.id, u.full_name ?? u.email)}><Trash2 className="size-4" /></Button>}
@@ -149,6 +154,43 @@ function PeopleTab({ isAdmin, enabled }: { isAdmin: boolean; enabled: boolean })
           )}
       </Card>
     </div>
+  );
+}
+
+function StoreAccessCell({ userId, allStores, storeIds }: { userId: string; allStores: boolean; storeIds: string[] }) {
+  const save = useServerFn(setStaffStores);
+  const qc = useQueryClient();
+  const { data: stores = [] } = useStores();
+  const [open, setOpen] = useState(false);
+  const [all, setAll] = useState(allStores);
+  const [sel, setSel] = useState<string[]>(storeIds);
+  const summary = allStores ? "All stores" : stores.filter((s) => storeIds.includes(s.id)).map((s) => s.name).join(", ") || `${storeIds.length} store(s)`;
+  const submit = async () => {
+    try {
+      await save({ data: { user_id: userId, all_stores: all, store_ids: sel } });
+      toast.success("Store access updated"); setOpen(false);
+      qc.invalidateQueries({ queryKey: ["staff-list"] });
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
+  };
+  return (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (v) { setAll(allStores); setSel(storeIds); } }}>
+      <DialogTrigger asChild><Button size="sm" variant="outline" className="h-8 max-w-48 truncate justify-start">{summary}</Button></DialogTrigger>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>Store access</DialogTitle></DialogHeader>
+        <label className="flex items-center gap-2 text-sm font-medium"><Checkbox checked={all} onCheckedChange={(v) => setAll(v === true)} /> All stores</label>
+        {!all && (
+          <div className="space-y-2 border rounded-md p-3 max-h-64 overflow-auto">
+            {stores.map((s) => (
+              <label key={s.id} className="flex items-center gap-2 text-sm">
+                <Checkbox checked={sel.includes(s.id)} onCheckedChange={(v) => setSel((p) => v === true ? [...p, s.id] : p.filter((x) => x !== s.id))} />
+                {s.name} <span className="text-xs text-muted-foreground">{s.kind}</span>
+              </label>
+            ))}
+          </div>
+        )}
+        <DialogFooter><Button onClick={submit}>Save</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
