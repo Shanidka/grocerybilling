@@ -611,33 +611,33 @@ function PaymentDialog({
     if (!open) {
       setMode("cash"); setPaid(""); setUpiQr(null);
       setSCash(""); setSCard(""); setSUpi(""); setSCredit("");
-    } else setPaid(totals.grand.toFixed(2));
-  }, [open, totals.grand]);
+    } else setPaid(due.toFixed(2));
+  }, [open, due]);
 
   useEffect(() => {
     if (mode === "upi" || mode === "qr" || mode === "split") {
       const pa = shop?.upi_id || "merchant@upi";
       const pn = encodeURIComponent(shop?.shop_name || "Supermarket");
-      const amt = mode === "split" ? Number(sUpi || 0) : totals.grand;
+      const amt = mode === "split" ? Number(sUpi || 0) : due;
       if (amt <= 0) { setUpiQr(null); return; }
       const upi = `upi://pay?pa=${pa}&pn=${pn}&am=${amt.toFixed(2)}&cu=INR&tn=Bill`;
       QRCode.toDataURL(upi, { width: 220, margin: 1 }).then(setUpiQr).catch(() => setUpiQr(null));
     } else setUpiQr(null);
-  }, [mode, totals.grand, sUpi, shop?.upi_id, shop?.shop_name]);
+  }, [mode, due, sUpi, shop?.upi_id, shop?.shop_name]);
 
   const splitCash = Number(sCash) || 0, splitCard = Number(sCard) || 0;
   const splitUpi = Number(sUpi) || 0, splitCredit = Number(sCredit) || 0;
   const splitPaid = splitCash + splitCard + splitUpi;
   const splitCovered = splitPaid + splitCredit;
-  const splitRemaining = Math.round((totals.grand - splitCovered) * 100) / 100;
+  const splitRemaining = Math.round((due - splitCovered) * 100) / 100;
 
   const paidNum = Number(paid) || 0;
   const change = mode === "split"
-    ? Math.max(0, splitCovered - totals.grand)
-    : Math.max(0, paidNum - totals.grand);
+    ? Math.max(0, splitCovered - due)
+    : Math.max(0, paidNum - due);
   const insufficient = mode === "split"
     ? splitRemaining > 0.01 || (splitCredit > 0 && !customerName.trim() && !customerPhone.trim())
-    : mode === "cash" && paidNum < totals.grand;
+    : mode === "cash" && paidNum < due;
 
   const complete = async () => {
     setLoading(true);
@@ -654,9 +654,9 @@ function PaymentDialog({
       const split = mode === "split"
         ? { amount_cash: splitCash, amount_card: splitCard, amount_upi: splitUpi, amount_other: 0, credit_amount: splitCredit, paid_amount: splitPaid }
         : {
-            amount_cash: mode === "cash" ? Math.min(paidNum, totals.grand) : 0,
-            amount_card: mode === "card" ? totals.grand : 0,
-            amount_upi: mode === "upi" || mode === "qr" ? totals.grand : 0,
+            amount_cash: mode === "cash" ? Math.min(paidNum, due) : 0,
+            amount_card: mode === "card" ? due : 0,
+            amount_upi: mode === "upi" || mode === "qr" ? due : 0,
             amount_other: 0,
             credit_amount: 0,
             paid_amount: paidNum,
@@ -671,7 +671,7 @@ function PaymentDialog({
         tax_total: totals.taxTotal,
         line_discount: totals.lineDisc,
         bill_discount: totals.billDisc,
-        grand_total: totals.grand,
+        grand_total: due,
         payment_mode: mode,
         change_amount: change,
         status: mode === "split" && splitCredit > 0 ? "credit" : "completed",
@@ -739,7 +739,7 @@ function PaymentDialog({
           line_discount: l.discount, line_total: l.unit_price * l.qty - l.discount, mrp: l.mrp,
         })),
         subtotal: totals.subtotal, taxTotal: totals.taxTotal,
-        lineDiscount: totals.lineDisc, billDisc: totals.billDisc, grand: totals.grand,
+        lineDiscount: totals.lineDisc, billDisc: totals.billDisc, grand: due,
         invoice_url,
         shop: shop ? {
           shop_name: shop.shop_name, phone: shop.phone, address: shop.address,
@@ -765,9 +765,9 @@ function PaymentDialog({
         } catch { /* non-blocking */ }
       }
 
-      void logActivity("billing", offline ? "sale-offline" : "sale", `Bill ${bill_no} — ${cart.length} item(s), total ${totals.grand.toFixed(2)} (${mode})`, { entityId: bill_no, details: { total: totals.grand, items: cart.length, payment_mode: mode, customer: customerName || null, offline } });
+      void logActivity("billing", offline ? "sale-offline" : "sale", `Bill ${bill_no} — ${cart.length} item(s), total ${due.toFixed(2)} (${mode})`, { entityId: bill_no, details: { total: due, items: cart.length, payment_mode: mode, customer: customerName || null, offline } });
       if (!offline) toast.success(`Bill ${bill_no} completed`);
-      onCompleted(bill_no, customerPhone, totals.grand);
+      onCompleted(bill_no, customerPhone, due);
       onClose();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to complete");
@@ -776,14 +776,14 @@ function PaymentDialog({
     }
   };
 
-  const quickPaid = [totals.grand, Math.ceil(totals.grand / 100) * 100, Math.ceil(totals.grand / 500) * 500];
+  const quickPaid = [due, Math.ceil(due / 100) * 100, Math.ceil(due / 500) * 500];
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !loading && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Collect payment</DialogTitle>
-          <DialogDescription>Total due <span className="font-semibold text-foreground">{inr(totals.grand)}</span></DialogDescription>
+          <DialogDescription>Total due <span className="font-semibold text-foreground">{inr(due)}</span></DialogDescription>
         </DialogHeader>
 
         <Tabs value={mode} onValueChange={setMode}>
@@ -822,7 +822,7 @@ function PaymentDialog({
           {(["upi", "qr"] as const).map((m) => (
             <TabsContent key={m} value={m} className="pt-4 text-center space-y-2">
               {upiQr ? <img src={upiQr} alt="UPI QR" className="mx-auto rounded-md border" /> : <div className="h-[220px] grid place-items-center"><QrCode className="size-12 text-muted-foreground" /></div>}
-              <p className="text-sm font-medium">Pay {inr(totals.grand)} to {shop?.shop_name ?? "shop"}</p>
+              <p className="text-sm font-medium">Pay {inr(due)} to {shop?.shop_name ?? "shop"}</p>
               <p className="text-xs text-muted-foreground">Scan with any UPI app{shop?.upi_id ? ` · ${shop.upi_id}` : ""}</p>
 
             </TabsContent>

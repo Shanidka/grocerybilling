@@ -9,6 +9,9 @@ export type ShopSettings = {
   gst_number: string | null;
   upi_id: string | null;
   receipt_footer: string | null;
+  loyalty_enabled?: boolean;
+  loyalty_earn_per?: number;
+  loyalty_point_value?: number;
 };
 
 export function useShopSettings() {
