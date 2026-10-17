@@ -13,6 +13,8 @@ import { useActiveStore, type Store as StoreRow } from "@/lib/active-store";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { chooseBillFolder, getBillFolderName, clearBillFolder, folderPickerSupported } from "@/lib/bill-folder";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   ssr: false,
@@ -87,6 +89,8 @@ function SettingsPage() {
         )}
       </Card>
 
+      <LoyaltyCard />
+      <BillFolderCard />
       <StoresCard />
     </div>
   );
@@ -219,5 +223,66 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <Label className="text-sm">{label}</Label>
       {children}
     </div>
+  );
+}
+
+function LoyaltyCard() {
+  const qc = useQueryClient();
+  const { data } = useShopSettings();
+  const [on, setOn] = useState(false);
+  const [earn, setEarn] = useState("100");
+  const [ptsPerRupee, setPtsPerRupee] = useState("10");
+  useEffect(() => {
+    if (!data) return;
+    setOn(!!data.loyalty_enabled);
+    setEarn(String(data.loyalty_earn_per ?? 100));
+    const v = Number(data.loyalty_point_value ?? 0.1) || 0.1;
+    setPtsPerRupee(String(Math.round(1 / v)));
+  }, [data]);
+  const save = async () => {
+    const e = Number(earn), p = Number(ptsPerRupee);
+    if (!(e > 0) || !(p > 0)) return toast.error("Enter valid numbers");
+    const { error } = await supabase.from("shop_settings").update({ loyalty_enabled: on, loyalty_earn_per: e, loyalty_point_value: 1 / p }).eq("id", 1);
+    if (error) return toast.error(error.message);
+    toast.success("Loyalty settings saved");
+    qc.invalidateQueries({ queryKey: ["shop-settings"] });
+  };
+  return (
+    <Card className="p-6 space-y-4 mt-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold">Customer loyalty program</h2>
+          <p className="text-xs text-muted-foreground">Only customers with a phone number who are added to the program earn points.</p>
+        </div>
+        <Switch checked={on} onCheckedChange={setOn} />
+      </div>
+      <div className="grid sm:grid-cols-2 gap-4">
+        <Field label="Rupees spent for 1 point"><Input type="number" value={earn} onChange={(e) => setEarn(e.target.value)} /></Field>
+        <Field label="Points needed for Rs.1 off"><Input type="number" value={ptsPerRupee} onChange={(e) => setPtsPerRupee(e.target.value)} /></Field>
+      </div>
+      <div className="flex justify-end"><Button onClick={save}><Save className="size-4" /> Save loyalty</Button></div>
+    </Card>
+  );
+}
+
+function BillFolderCard() {
+  const [name, setName] = useState<string | null>(null);
+  useEffect(() => { void getBillFolderName().then(setName); }, []);
+  const supported = typeof window !== "undefined" && folderPickerSupported();
+  return (
+    <Card className="p-6 space-y-3 mt-6">
+      <h2 className="font-semibold">Bill save folder</h2>
+      {supported ? (
+        <>
+          <p className="text-sm text-muted-foreground">Saved bill PDFs go to: <b className="text-foreground">{name ?? "Downloads (not chosen)"}</b></p>
+          <div className="flex gap-2">
+            <Button onClick={async () => { try { const n = await chooseBillFolder(); if (n) { setName(n); toast.success(`Bills will be saved in ${n}`); } } catch { /* cancelled */ } }}>Choose bill folder</Button>
+            {name && <Button variant="outline" onClick={async () => { await clearBillFolder(); setName(null); }}>Reset</Button>}
+          </div>
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">This browser can't remember a folder. Use Chrome or Edge on a PC. Here, Save PDF lets you pick a location each time.</p>
+      )}
+    </Card>
   );
 }
