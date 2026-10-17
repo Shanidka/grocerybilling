@@ -16,7 +16,8 @@ import { ScannerPanel } from "@/components/camera-scanner";
 import { CameraIcon, Plus, Minus, Trash2, Search, Pause, Play, Printer, IndianRupee, Loader2, ShoppingCart, QrCode, Share2, Copy, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { inr } from "@/lib/format";
-import { generateReceipt } from "@/lib/receipt";
+import { generateReceipt, type ReceiptInput } from "@/lib/receipt";
+import { saveBillFile, waNumber } from "@/lib/bill-folder";
 import { useShopSettings, parseScaleBarcode } from "@/lib/shop-settings";
 import { useStoreId, useActiveStore } from "@/lib/active-store";
 import { makeClientUid, makeOfflineBillNo, queueSale, adjustCachedStock, syncOfflineSales, pendingCount } from "@/lib/offline-sales";
@@ -72,7 +73,7 @@ function Billing() {
   const [scanOpen, setScanOpen] = useState(false);
   const [recallOpen, setRecallOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
-  const [shareInfo, setShareInfo] = useState<{ billNo: string; phone: string; total: number } | null>(null);
+  const [shareInfo, setShareInfo] = useState<ShareInfo | null>(null);
   const [search, setSearch] = useState("");
   const [highlight, setHighlight] = useState(0);
   const [matchPick, setMatchPick] = useState<Product[] | null>(null);
@@ -533,8 +534,9 @@ function Billing() {
         cart={cart}
         customerName={customerName}
         customerPhone={customerPhone}
-        onCompleted={(billNo, phone, total) => {
-          setShareInfo({ billNo, phone, total });
+        onCompleted={(billNo, phone, total, receipt, action) => {
+          if (action === "print") void generateReceipt(receipt, "print");
+          if (action !== "none") setShareInfo({ billNo, phone, total, receipt, autoPrinted: action === "print" });
           clearCart();
           qc.invalidateQueries({ queryKey: ["billing-products"] });
         }}
@@ -584,7 +586,7 @@ function PaymentDialog({
   open: boolean; onClose: () => void;
   totals: { subtotal: number; lineDisc: number; taxTotal: number; billDisc: number; grand: number };
   cart: CartLine[]; customerName: string; customerPhone: string;
-  onCompleted: (billNo: string, phone: string, total: number) => void;
+  onCompleted: (billNo: string, phone: string, total: number, receipt: ReceiptInput, action: CompleteAction) => void;
 }) {
   const { data: shopBase } = useShopSettings();
   const { storeId, store } = useActiveStore();
@@ -606,11 +608,31 @@ function PaymentDialog({
   // Split / credit
   const [sCash, setSCash] = useState(""); const [sCard, setSCard] = useState("");
   const [sUpi, setSUpi] = useState(""); const [sCredit, setSCredit] = useState("");
+  // Loyalty
+  const loyaltyOn = !!shopBase?.loyalty_enabled;
+  const earnPer = Number(shopBase?.loyalty_earn_per ?? 100) || 100;
+  const pointValue = Number(shopBase?.loyalty_point_value ?? 0.1) || 0.1;
+  const phoneKey = customerPhone.trim();
+  const member = useQuery({
+    enabled: open && loyaltyOn && phoneKey.length >= 10,
+    queryKey: ["loyalty-member", storeId, phoneKey],
+    queryFn: async () => {
+      const { data } = await supabase.from("customers").select("id,name,loyalty_enabled,loyalty_points")
+        .eq("store_id", storeId).eq("phone", phoneKey).maybeSingle();
+      return data && data.loyalty_enabled ? { id: data.id, points: Number(data.loyalty_points) || 0 } : null;
+    },
+  });
+  const [redeemPts, setRedeemPts] = useState("");
+  const maxRedeem = member.data ? Math.min(member.data.points, Math.floor(totals.grand / pointValue)) : 0;
+  const redeem = Math.max(0, Math.min(Math.floor(Number(redeemPts) || 0), maxRedeem));
+  const loyaltyDiscount = Math.round(redeem * pointValue * 100) / 100;
+  const due = Math.round((totals.grand - loyaltyDiscount) * 100) / 100;
+  const earned = member.data ? Math.floor(due / earnPer) : 0;
 
   useEffect(() => {
     if (!open) {
       setMode("cash"); setPaid(""); setUpiQr(null);
-      setSCash(""); setSCard(""); setSUpi(""); setSCredit("");
+      setSCash(""); setSCard(""); setSUpi(""); setSCredit(""); setRedeemPts("");
     } else setPaid(due.toFixed(2));
   }, [open, due]);
 
@@ -639,7 +661,7 @@ function PaymentDialog({
     ? splitRemaining > 0.01 || (splitCredit > 0 && !customerName.trim() && !customerPhone.trim())
     : mode === "cash" && paidNum < due;
 
-  const complete = async () => {
+  const complete = async (action: CompleteAction) => {
     setLoading(true);
     try {
       const { data: sess } = await supabase.auth.getSession();
@@ -675,6 +697,9 @@ function PaymentDialog({
         payment_mode: mode,
         change_amount: change,
         status: mode === "split" && splitCredit > 0 ? "credit" : "completed",
+        points_earned: earned,
+        points_redeemed: redeem,
+        loyalty_discount: loyaltyDiscount,
         ...split,
       };
       const itemRows = cart.map((l) => ({
@@ -689,6 +714,7 @@ function PaymentDialog({
       }));
 
       let bill_no = "";
+      let saleId: string | null = null;
       let created_at = new Date().toISOString();
       let offline = typeof navigator !== "undefined" && !navigator.onLine;
 
@@ -704,6 +730,7 @@ function PaymentDialog({
             .single();
           if (saleErr) throw saleErr;
           created_at = saleRow.created_at;
+          saleId = saleRow.id;
           const { error: itemsErr } = await supabase
             .from("sale_items")
             .insert(itemRows.map((i) => ({ ...i, sale_id: saleRow.id })) as never);
@@ -723,8 +750,22 @@ function PaymentDialog({
         toast.warning(`Saved offline as ${bill_no} — will sync automatically`);
       }
 
+      // Loyalty points (online only)
+      let loyaltyBalance: number | undefined;
+      if (!offline && member.data && (earned > 0 || redeem > 0)) {
+        try {
+          const rows = [
+            ...(redeem > 0 ? [{ customer_id: member.data.id, sale_id: saleId, store_id: storeId, kind: "redeem", points: redeem, created_by: uid }] : []),
+            ...(earned > 0 ? [{ customer_id: member.data.id, sale_id: saleId, store_id: storeId, kind: "earn", points: earned, created_by: uid }] : []),
+          ];
+          await supabase.from("loyalty_transactions").insert(rows);
+          loyaltyBalance = Math.max(0, member.data.points - redeem) + earned;
+          qc.invalidateQueries({ queryKey: ["loyalty-member"] });
+        } catch { /* non-blocking */ }
+      }
+
       const invoice_url = !offline && typeof window !== "undefined" ? `${window.location.origin}/i/${bill_no}` : undefined;
-      await generateReceipt({
+      const receipt: ReceiptInput = {
         bill_no, created_at,
         cashier_name: billerName || undefined,
         customer_name: customerName, customer_phone: customerPhone,
@@ -745,7 +786,8 @@ function PaymentDialog({
           shop_name: shop.shop_name, phone: shop.phone, address: shop.address,
           gst_number: shop.gst_number, upi_id: shop.upi_id, receipt_footer: shop.receipt_footer,
         } : undefined,
-      });
+        loyalty: member.data ? { earned, redeemed: redeem, discount: loyaltyDiscount, balance: loyaltyBalance } : null,
+      };
 
       // Persist customer details to the directory (store-scoped, de-duped by phone)
       if (!offline && (customerName.trim() || customerPhone.trim())) {
@@ -767,7 +809,7 @@ function PaymentDialog({
 
       void logActivity("billing", offline ? "sale-offline" : "sale", `Bill ${bill_no} — ${cart.length} item(s), total ${due.toFixed(2)} (${mode})`, { entityId: bill_no, details: { total: due, items: cart.length, payment_mode: mode, customer: customerName || null, offline } });
       if (!offline) toast.success(`Bill ${bill_no} completed`);
-      onCompleted(bill_no, customerPhone, due);
+      onCompleted(bill_no, customerPhone, due, receipt, action);
       onClose();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to complete");
