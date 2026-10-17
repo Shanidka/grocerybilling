@@ -46,6 +46,7 @@ export const listStaff = createServerFn({ method: "GET" })
     if (uErr) throw new Error(uErr.message);
     const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id,role,role_key");
     const { data: profiles } = await supabaseAdmin.from("profiles").select("id,full_name");
+    const { data: scopes } = await supabaseAdmin.from("staff_store_scope").select("user_id,all_stores,store_ids");
     return userList.users.map((u) => {
       const r = roles?.find((x) => x.user_id === u.id);
       return {
@@ -55,6 +56,8 @@ export const listStaff = createServerFn({ method: "GET" })
         role_key: (r?.role_key as string | null) || (r?.role as string | undefined) || "cashier",
         base_role: (r?.role ?? "cashier") as BaseRole,
         created_at: u.created_at,
+        all_stores: scopes?.find((x) => x.user_id === u.id)?.all_stores ?? true,
+        store_ids: (scopes?.find((x) => x.user_id === u.id)?.store_ids ?? []) as string[],
       };
     });
   });
@@ -105,5 +108,28 @@ export const deleteStaff = createServerFn({ method: "POST" })
     const { error } = await supabaseAdmin.auth.admin.deleteUser(data.user_id);
     if (error) throw new Error(error.message);
     await writeLog(context.userId, "delete", `Removed staff user`, data.user_id);
+    return { ok: true };
+  });
+
+export const setStaffStores = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { user_id: string; all_stores: boolean; store_ids: string[] }) => ({
+    user_id: String(d.user_id), all_stores: !!d.all_stores,
+    store_ids: Array.isArray(d.store_ids) ? d.store_ids.map(String).slice(0, 200) : [],
+  }))
+  .handler(async ({ data, context }) => {
+    const level = await myLevel(context as Ctx);
+    if (!level) throw new Error("Forbidden");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    if (level === "manager") {
+      const { data: target } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", data.user_id);
+      if ((target ?? []).some((r) => r.role === "admin")) throw new Error("Managers cannot change an admin's store access");
+    }
+    if (!data.all_stores && !data.store_ids.length) throw new Error("Pick at least one store");
+    const { error } = await supabaseAdmin.from("staff_store_scope").upsert({
+      user_id: data.user_id, all_stores: data.all_stores, store_ids: data.all_stores ? [] : data.store_ids, updated_at: new Date().toISOString(),
+    });
+    if (error) throw new Error(error.message);
+    await writeLog(context.userId, "store-access", data.all_stores ? "Set store access: all stores" : `Set store access: ${data.store_ids.length} store(s)`, data.user_id);
     return { ok: true };
   });

@@ -87,6 +87,11 @@ function AppShell() {
   const [sideHidden, setSideHidden] = useState(false);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
 
+  // Keep the active store within the stores this user may access
+  useEffect(() => {
+    if (stores.length && !stores.some((s) => s.id === storeId)) setStoreId(stores[0].id);
+  }, [stores, storeId, setStoreId]);
+
   // Billing starts full-screen: hide the side panel automatically (arrow button un-hides it)
   useEffect(() => {
     setSideHidden(pathname === "/billing");
