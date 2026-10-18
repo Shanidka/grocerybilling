@@ -1,3 +1,5 @@
+import { PriceAveragesTab } from "@/components/price-averages";
+import { Scale } from "lucide-react";
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useStoreId } from "@/lib/active-store";
@@ -92,6 +94,7 @@ function ReportsPage() {
           <TabsTrigger value="customers"><UserRound className="size-4" /> Customers</TabsTrigger>
           <TabsTrigger value="purchases"><ShoppingCart className="size-4" /> Purchases</TabsTrigger>
           <TabsTrigger value="inventory"><Snowflake className="size-4" /> Inventory</TabsTrigger>
+          <TabsTrigger value="price-avg"><Scale className="size-4" /> Price averages</TabsTrigger>
           <TabsTrigger value="logs"><ScrollText className="size-4" /> Logs</TabsTrigger>
           <TabsTrigger value="leaks"><AlertTriangle className="size-4" /> Profit leaks</TabsTrigger>
         </TabsList>
@@ -110,6 +113,7 @@ function ReportsPage() {
         <TabsContent value="purchases" className="mt-4"><PurchasesTab range={range} /></TabsContent>
         <TabsContent value="inventory" className="mt-4"><InventoryTab /></TabsContent>
         <TabsContent value="leaks" className="mt-4"><LeaksTab range={range} costing={costing} /></TabsContent>
+        <TabsContent value="price-avg" className="mt-4"><PriceAveragesTab range={range} /></TabsContent>
         <TabsContent value="logs" className="mt-4"><LogsTab /></TabsContent>
       </Tabs>
     </div>
