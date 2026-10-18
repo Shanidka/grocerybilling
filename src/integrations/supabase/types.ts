@@ -1216,6 +1216,7 @@ export type Database = {
       stores: {
         Row: {
           address: string | null
+          billing_favourite_ids: string[]
           created_at: string
           gst_number: string | null
           id: string
@@ -1228,6 +1229,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          billing_favourite_ids?: string[]
           created_at?: string
           gst_number?: string | null
           id?: string
@@ -1240,6 +1242,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          billing_favourite_ids?: string[]
           created_at?: string
           gst_number?: string | null
           id?: string

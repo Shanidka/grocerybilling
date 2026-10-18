@@ -1,0 +1,2 @@
+ALTER TABLE public.stores ADD COLUMN IF NOT EXISTS billing_favourite_ids uuid[] NOT NULL DEFAULT '{}';
+ALTER TABLE public.stores ADD CONSTRAINT stores_billing_favourites_limit CHECK (cardinality(billing_favourite_ids) <= 16);
