@@ -1,3 +1,4 @@
+// @ts-ignore bun built-in test runner (run: bun test ./src/lib/bill-rules.test.ts)
 import { expect, test } from "bun:test";
 import { waNumber } from "./bill-folder";
 import { periodKey } from "./price-periods";
