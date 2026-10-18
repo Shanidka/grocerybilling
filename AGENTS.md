@@ -8,3 +8,7 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+- Store access is enforced in the database via `can_access_store()` on store-scoped SELECT policies (stores, products, sales, customers) and the `staff_store_scope` table; no row = all stores. Why: UI filtering alone can be bypassed.
+- Receipts: `generateReceipt(r, "save"|"print"|"blob")` is the single receipt builder; printing uses a hidden iframe, saving goes through `saveBillFile` (folder handle in IndexedDB). Why: one layout for print, PDF and reprints.
+- Loyalty balances change only through `loyalty_transactions` inserts (trigger updates customers.loyalty_points). Why: auditable points history.
+- Purchases update `products.avg_cost` via trigger and never touch selling price. Why: loose items keep one fixed selling price.
