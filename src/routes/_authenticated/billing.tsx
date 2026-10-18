@@ -33,7 +33,7 @@ export const Route = createFileRoute("/_authenticated/billing")({
 type Product = {
   id: string; barcode: string | null; name: string; brand: string | null;
   selling_price: number; mrp: number; tax_pct: number; stock_qty: number; unit: string;
-  sold_by: string; price_per_kg: number; purchase_price: number;
+  sold_by: string; price_per_kg: number; purchase_price: number; avg_cost?: number | null;
 };
 
 type CartLine = {
@@ -90,7 +90,7 @@ function Billing() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
-        .select("id,barcode,name,brand,selling_price,mrp,tax_pct,stock_qty,unit,is_active,sold_by,price_per_kg,purchase_price")
+        .select("id,barcode,name,brand,selling_price,mrp,tax_pct,stock_qty,unit,is_active,sold_by,price_per_kg,purchase_price,avg_cost")
         .eq("store_id", storeId)
         .eq("is_active", true)
         .order("name");
@@ -169,7 +169,7 @@ function Billing() {
           product_id: p.id, name: p.name, unit_price,
           qty, tax_pct: Number(p.tax_pct), discount: 0, stock_qty: Number(p.stock_qty),
           sold_by: p.sold_by, unit: isWeight ? "kg" : p.unit, mrp: Number(p.mrp || 0),
-          cost: Number(p.purchase_price || 0),
+          cost: Number(p.avg_cost || p.purchase_price || 0),
         },
       ];
     });
