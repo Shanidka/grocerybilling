@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,7 +11,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/auth")({
   ssr: false,
   component: AuthPage,
-  head: () => ({ meta: [{ title: "Sign in — Bazaar POS" }] }),
+  head: () => pageMeta("Sign in — Bazaar POS", "Sign in to Bazaar POS to manage your store and start billing."),
 });
 
 function AuthPage() {

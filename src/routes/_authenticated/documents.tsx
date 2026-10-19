@@ -21,6 +21,10 @@ export const Route = createFileRoute("/_authenticated/documents")({
     meta: [
       { title: "Shop documents — Bazaar POS" },
       { name: "description", content: "Store licenses, GST certificates and shop agreements with expiry reminders." },
+      { property: "og:title", content: "Shop documents — Bazaar POS" },
+      { property: "og:description", content: "Manage store licenses, certificates and shop agreements." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
 });

@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -20,7 +21,7 @@ import { chooseBillFolder, getBillFolderName, clearBillFolder, folderPickerSuppo
 export const Route = createFileRoute("/_authenticated/settings")({
   ssr: false,
   component: SettingsPage,
-  head: () => ({ meta: [{ title: "Shop settings — Bazaar POS" }] }),
+  head: () => pageMeta("Shop settings — Bazaar POS", "Configure shop details, billing favourites and receipt settings."),
 });
 
 function SettingsPage() {

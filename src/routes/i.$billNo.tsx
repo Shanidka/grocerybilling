@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -9,7 +10,7 @@ import QRCode from "qrcode";
 export const Route = createFileRoute("/i/$billNo")({
   ssr: false,
   component: InvoiceView,
-  head: ({ params }) => ({ meta: [{ title: `Invoice ${params.billNo}` }] }),
+  head: ({ params }) => pageMeta(`Invoice ${params.billNo} — Bazaar POS`, `View customer invoice ${params.billNo} from Bazaar POS.`),
 });
 
 function InvoiceView() {

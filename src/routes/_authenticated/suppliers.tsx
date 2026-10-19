@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,7 +17,7 @@ import { useMyRoles, canManage } from "@/hooks/use-role";
 export const Route = createFileRoute("/_authenticated/suppliers")({
   ssr: false,
   component: SuppliersPage,
-  head: () => ({ meta: [{ title: "Suppliers — Bazaar POS" }] }),
+  head: () => pageMeta("Suppliers — Bazaar POS", "Manage supplier contacts and purchasing relationships."),
 });
 
 type Supplier = { id: string; name: string; phone: string | null; email: string | null; gst_number: string | null; address: string | null; notes: string | null };

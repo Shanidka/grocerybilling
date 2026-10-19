@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute } from "@tanstack/react-router";
 import { logActivity } from "@/lib/activity-log";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -30,7 +31,7 @@ import { cashTender } from "@/lib/cash-tender";
 export const Route = createFileRoute("/_authenticated/billing")({
   ssr: false,
   component: Billing,
-  head: () => ({ meta: [{ title: "Billing — Bazaar POS" }] }),
+  head: () => pageMeta("Billing — Bazaar POS", "Create customer bills, search by voice and collect payments."),
 });
 
 type Product = {

@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useStoreId } from "@/lib/active-store";
@@ -13,7 +14,7 @@ import { useMyRoles, canManage } from "@/hooks/use-role";
 export const Route = createFileRoute("/_authenticated/dashboard")({
   ssr: false,
   component: Dashboard,
-  head: () => ({ meta: [{ title: "Dashboard — Bazaar POS" }] }),
+  head: () => pageMeta("Dashboard — Bazaar POS", "Review store activity, sales and business metrics."),
 });
 
 function Dashboard() {

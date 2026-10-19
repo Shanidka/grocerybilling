@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute } from "@tanstack/react-router";
 import { logActivity } from "@/lib/activity-log";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,7 +30,7 @@ export const Route = createFileRoute("/_authenticated/inventory")({
   validateSearch: (search: Record<string, unknown>): { tab?: string } =>
     typeof search.tab === "string" ? { tab: search.tab } : {},
   component: InventoryPage,
-  head: () => ({ meta: [{ title: "Inventory — Bazaar POS" }] }),
+  head: () => pageMeta("Inventory — Bazaar POS", "Track stock levels, purchases, adjustments, damage and returns."),
 });
 
 type TabDef = { value: string; label: string; icon: React.ComponentType<{ className?: string }>; desc: string; tone: string };
