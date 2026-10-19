@@ -314,12 +314,12 @@ function Billing() {
       </div>
 
 
-      <div className="flex-1 grid lg:grid-cols-[1fr_420px] min-h-0">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] min-h-0 min-w-0">
         {/* Left: search + cart */}
-        <div className="flex flex-col min-h-0 border-r">
+        <div className="flex flex-col min-h-0 min-w-0 border-r">
           <div className="p-4 border-b space-y-3 bg-background">
             <div className="flex gap-2 flex-wrap">
-              <div className="relative flex-1 min-w-48">
+              <div className="relative flex-1 min-w-0 basis-full sm:basis-auto">
                 <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   ref={searchRef}
