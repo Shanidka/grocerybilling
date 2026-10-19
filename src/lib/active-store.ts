@@ -45,6 +45,7 @@ export type Store = {
   gst_number: string | null;
   upi_id: string | null;
   is_active: boolean;
+  billing_favourite_ids: string[];
 };
 
 export function useStores() {
@@ -53,7 +54,7 @@ export function useStores() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("stores")
-        .select("id,name,kind,phone,address,gst_number,upi_id,is_active")
+        .select("id,name,kind,phone,address,gst_number,upi_id,is_active,billing_favourite_ids")
         .eq("is_active", true)
         .order("name");
       if (error) throw error;

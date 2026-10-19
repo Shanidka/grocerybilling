@@ -38,11 +38,6 @@ export type ReceiptOutput = "save" | "print" | "blob";
 export async function generateReceipt(r: ReceiptInput, output: ReceiptOutput = "save"): Promise<Blob | void> {
   const shop: ShopInfo = r.shop ?? { shop_name: "My Supermarket" };
 
-  const invoiceQrPayload = r.invoice_url ?? JSON.stringify({
-    bill: r.bill_no, at: r.created_at, total: r.grand, shop: shop.shop_name,
-  });
-  const invoiceQr = await QRCode.toDataURL(invoiceQrPayload, { margin: 0, width: 160 });
-
   let payQr: string | null = null;
   if (shop.upi_id) {
     const upi = `upi://pay?pa=${shop.upi_id}&pn=${encodeURIComponent(shop.shop_name)}&am=${r.grand.toFixed(2)}&cu=INR&tn=${encodeURIComponent("Bill " + r.bill_no)}`;
@@ -51,7 +46,7 @@ export async function generateReceipt(r: ReceiptInput, output: ReceiptOutput = "
 
   const W = 80;
   const headerLines = 1 + (shop.address ? Math.ceil(shop.address.length / 36) : 0) + (shop.phone || shop.gst_number ? 1 : 0);
-  const H = (r.loyalty ? 14 : 0) + 60 + headerLines * 4 + r.items.length * 8 + 70 + (payQr ? 36 : 0);
+  const H = (r.loyalty ? 14 : 0) + 60 + headerLines * 4 + r.items.length * 8 + 34 + (payQr ? 40 : 0);
   const doc = new jsPDF({ unit: "mm", format: [W, H] });
   let y = 8;
 
@@ -96,9 +91,10 @@ export async function generateReceipt(r: ReceiptInput, output: ReceiptOutput = "
     doc.text(it.unit_price.toFixed(2), 58, y, { align: "right" });
     doc.text(it.line_total.toFixed(2), W - 4, y, { align: "right" });
     y += 4;
-    const hasMrp = it.mrp && it.mrp > it.unit_price;
+    const mrp = it.mrp ?? 0;
+    const hasMrp = mrp > it.unit_price;
     const metaParts = [
-      hasMrp ? `MRP Rs.${it.mrp!.toFixed(2)}` : null,
+      hasMrp ? `MRP Rs.${mrp.toFixed(2)}` : null,
       it.line_discount > 0 ? `disc Rs.${it.line_discount.toFixed(2)}` : null,
       it.tax_pct > 0 ? `GST ${it.tax_pct}%` : null,
     ].filter(Boolean).join(" · ");
@@ -106,7 +102,7 @@ export async function generateReceipt(r: ReceiptInput, output: ReceiptOutput = "
       doc.setFontSize(7).setTextColor(120);
       doc.text(metaParts, 4, y);
       if (hasMrp) {
-        const save = (it.mrp! - it.unit_price) * it.qty;
+        const save = (mrp - it.unit_price) * it.qty;
         doc.setTextColor(0, 128, 0);
         doc.text(`save Rs.${save.toFixed(2)}`, W - 4, y, { align: "right" });
       }
@@ -149,24 +145,16 @@ export async function generateReceipt(r: ReceiptInput, output: ReceiptOutput = "
 
   y += 3;
   if (payQr) {
-    // Two QRs side by side: pay (left) and invoice (right)
-    doc.addImage(payQr, "PNG", 6, y, 28, 28);
-    doc.addImage(invoiceQr, "PNG", W - 34, y, 28, 28);
+    doc.addImage(payQr, "PNG", (W - 28) / 2, y, 28, 28);
     y += 30;
     doc.setFont("helvetica", "bold").setFontSize(7);
-    doc.text(`Pay Rs.${r.grand.toFixed(2)}`, 20, y, { align: "center" });
-    doc.text("Invoice", W - 20, y, { align: "center" });
+    doc.text(`Pay Rs.${r.grand.toFixed(2)}`, W / 2, y, { align: "center" });
     y += 4;
     doc.setFont("helvetica", "normal").setFontSize(6).setTextColor(120);
-    doc.text(`Pay to ${shop.shop_name}`, 20, y, { align: "center" });
-    doc.text("Scan to view bill", W - 20, y, { align: "center" });
+    doc.text(`Pay to ${shop.shop_name}`, W / 2, y, { align: "center" });
     y += 4;
-  } else {
-    doc.addImage(invoiceQr, "PNG", (W - 28) / 2, y, 28, 28);
-    y += 30;
-    doc.setFont("helvetica", "normal").setFontSize(7).setTextColor(120);
-    doc.text("Scan QR to view invoice", W / 2, y, { align: "center" });
-    y += 3;
+    doc.text("Scan with GPay / PhonePe / Paytm", W / 2, y, { align: "center" });
+    y += 4;
   }
   if (shop.receipt_footer) {
     const wrapped = doc.splitTextToSize(shop.receipt_footer, W - 8);

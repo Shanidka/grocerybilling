@@ -58,7 +58,7 @@ export function FavouritesSettings() {
       const { data, error } = await supabase.from("stores").update({ billing_favourite_ids: selected }).eq("id", storeId).select("id").single();
       if (error || !data) throw error ?? new Error("Could not save favourites");
       await qc.invalidateQueries({ queryKey: ["stores"] });
-      void logActivity("settings", "billing-favourites", { store_id: storeId, product_ids: selected });
+      void logActivity("settings", "billing-favourites", "Updated billing favourites", { storeId, details: { product_ids: selected } });
       toast.success("Billing favourites saved");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Could not save favourites"); }
     finally { setSaving(false); }

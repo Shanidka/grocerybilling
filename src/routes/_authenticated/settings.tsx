@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
+import { FavouritesSettings } from "@/components/billing-favourites";
 import { chooseBillFolder, getBillFolderName, clearBillFolder, folderPickerSupported } from "@/lib/bill-folder";
 
 export const Route = createFileRoute("/_authenticated/settings")({
@@ -90,6 +91,7 @@ function SettingsPage() {
       </Card>
 
       <LoyaltyCard />
+      <FavouritesSettings />
       <BillFolderCard />
       <StoresCard />
     </div>
