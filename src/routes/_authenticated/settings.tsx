@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -14,12 +15,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
+import { FavouritesSettings } from "@/components/billing-favourites";
 import { chooseBillFolder, getBillFolderName, clearBillFolder, folderPickerSupported } from "@/lib/bill-folder";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   ssr: false,
   component: SettingsPage,
-  head: () => ({ meta: [{ title: "Shop settings — Bazaar POS" }] }),
+  head: () => pageMeta("Shop settings — Bazaar POS", "Configure shop details, billing favourites and receipt settings."),
 });
 
 function SettingsPage() {
@@ -90,6 +92,7 @@ function SettingsPage() {
       </Card>
 
       <LoyaltyCard />
+      <FavouritesSettings />
       <BillFolderCard />
       <StoresCard />
     </div>

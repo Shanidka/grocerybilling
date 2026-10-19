@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { logActivity } from "@/lib/activity-log";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,7 +21,7 @@ import { useMyRoles, canManage } from "@/hooks/use-role";
 export const Route = createFileRoute("/_authenticated/expenses")({
   ssr: false,
   component: ExpensesPage,
-  head: () => ({ meta: [{ title: "Expenses — Bazaar POS" }] }),
+  head: () => pageMeta("Expenses — Bazaar POS", "Review and manage store operating expenses."),
 });
 
 const CATEGORIES = [

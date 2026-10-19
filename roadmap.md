@@ -8,6 +8,8 @@
 - [x] Loyalty program (Rs.100 = 1 pt, 10 pts = Rs.1), toggle in settings, per-customer enable
 
 ## Counter-speed rollout
-- [ ] Phase 1: Remove invoice QR, voice product search, store favourites in Settings, quick cash buttons
-- [ ] Phase 2: Automated daily/weekly/monthly/yearly email reports with add/remove recipients (requires sender setup); blind drawer reconciliation; credit limits/overdue alerts; WhatsApp reminders
-- [ ] Phase 3: Scale barcode formats; expiry markdown suggestions; GSTR-1/GSTR-3B summaries
+- [x] Phase 1: Remove invoice QR, voice product search, store favourites in Settings, quick cash buttons
+
+## Later phases (outside the selected Phase 1 scope)
+- Phase 2: Automated daily/weekly/monthly/yearly email reports with add/remove recipients (sender setup required); blind drawer reconciliation; credit limits/overdue alerts; WhatsApp reminders
+- Phase 3: Scale barcode formats; expiry markdown suggestions; GSTR-1/GSTR-3B summaries

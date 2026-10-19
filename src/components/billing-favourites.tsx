@@ -19,13 +19,23 @@ export function BillingFavourites<T extends PickProduct>({ products, onAdd }: { 
   const [expanded, setExpanded] = useState(true);
   const ids = store?.billing_favourite_ids ?? [];
   const favourites = ids.flatMap((id) => { const p = products.find((item) => item.id === id); return p ? [p] : []; });
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent) => {
+      if (!event.altKey || event.ctrlKey || event.metaKey || document.querySelector('[role="dialog"]')) return;
+      const index = Number(event.key) - 1;
+      const product = index >= 0 && index < 9 ? favourites[index] : undefined;
+      if (product) { event.preventDefault(); onAdd(product); }
+    };
+    window.addEventListener("keydown", keydown);
+    return () => window.removeEventListener("keydown", keydown);
+  }, [favourites, onAdd]);
   if (!favourites.length) return null;
   return <div className="px-4 py-2 border-b bg-surface">
     <Button variant="ghost" size="sm" className="px-0 mb-1" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
       <Star className="text-primary" /> Favourites {expanded ? <ChevronUp /> : <ChevronDown />}
     </Button>
     {expanded && <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 pb-2">
-      {favourites.map((p) => <Button key={p.id} variant="outline" className="h-16 min-w-0 flex-col items-start gap-1 px-3" onClick={() => onAdd(p)} title={`${p.name} · MRP ${inr(p.mrp)}`}>
+      {favourites.map((p, index) => <Button key={p.id} variant="outline" className="h-16 min-w-0 flex-col items-start gap-1 px-3" onClick={() => onAdd(p)} title={`${p.name} · MRP ${inr(p.mrp)}${index < 9 ? ` · Alt+${index + 1}` : ""}`}>
         <span className="w-full truncate text-left">{p.name}</span>
         <span className="text-xs text-muted-foreground">{inr(p.sold_by === "weight" ? p.price_per_kg : p.selling_price)}{p.sold_by === "weight" ? "/kg" : ""}</span>
       </Button>)}
@@ -58,7 +68,7 @@ export function FavouritesSettings() {
       const { data, error } = await supabase.from("stores").update({ billing_favourite_ids: selected }).eq("id", storeId).select("id").single();
       if (error || !data) throw error ?? new Error("Could not save favourites");
       await qc.invalidateQueries({ queryKey: ["stores"] });
-      void logActivity("settings", "billing-favourites", { store_id: storeId, product_ids: selected });
+      void logActivity("settings", "billing-favourites", "Updated billing favourites", { storeId, details: { product_ids: selected } });
       toast.success("Billing favourites saved");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Could not save favourites"); }
     finally { setSaving(false); }

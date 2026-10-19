@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,7 +18,7 @@ import { Plus, Search, Pencil, Trash2 } from "lucide-react";
 export const Route = createFileRoute("/_authenticated/customers")({
   ssr: false,
   component: CustomersPage,
-  head: () => ({ meta: [{ title: "Customers — Bazaar POS" }] }),
+  head: () => pageMeta("Customers — Bazaar POS", "Manage customer profiles, contact details and loyalty membership."),
 });
 
 type Customer = { id: string; name: string; phone: string | null; email: string | null; notes: string | null; loyalty_enabled: boolean; loyalty_points: number };

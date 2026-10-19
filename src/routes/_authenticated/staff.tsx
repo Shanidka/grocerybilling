@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -21,7 +22,7 @@ import { logActivity } from "@/lib/activity-log";
 export const Route = createFileRoute("/_authenticated/staff")({
   ssr: false,
   component: StaffPage,
-  head: () => ({ meta: [{ title: "Staff — Bazaar POS" }] }),
+  head: () => pageMeta("Staff — Bazaar POS", "Manage staff, designations and store access."),
 });
 
 const BASE_ROLES = [

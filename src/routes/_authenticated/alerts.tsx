@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useStoreId } from "@/lib/active-store";
@@ -13,7 +14,7 @@ import { inr } from "@/lib/format";
 export const Route = createFileRoute("/_authenticated/alerts")({
   ssr: false,
   component: AlertsPage,
-  head: () => ({ meta: [{ title: "Alerts — Bazaar POS" }] }),
+  head: () => pageMeta("Alerts — Bazaar POS", "Review low-stock and product-expiry alerts for your store."),
 });
 
 type ExpiryBucket = "expired" | "7d" | "30d" | "90d" | "all";

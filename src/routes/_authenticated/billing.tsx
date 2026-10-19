@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute } from "@tanstack/react-router";
 import { logActivity } from "@/lib/activity-log";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -22,12 +23,15 @@ import { useShopSettings, parseScaleBarcode } from "@/lib/shop-settings";
 import { useStoreId, useActiveStore } from "@/lib/active-store";
 import { makeClientUid, makeOfflineBillNo, queueSale, adjustCachedStock, syncOfflineSales, pendingCount } from "@/lib/offline-sales";
 import QRCode from "qrcode";
+import { VoiceSearch } from "@/components/voice-search";
+import { BillingFavourites } from "@/components/billing-favourites";
+import { cashTender } from "@/lib/cash-tender";
 
 
 export const Route = createFileRoute("/_authenticated/billing")({
   ssr: false,
   component: Billing,
-  head: () => ({ meta: [{ title: "Billing — Bazaar POS" }] }),
+  head: () => pageMeta("Billing — Bazaar POS", "Create customer bills, search by voice and collect payments."),
 });
 
 type Product = {
@@ -310,12 +314,12 @@ function Billing() {
       </div>
 
 
-      <div className="flex-1 grid lg:grid-cols-[1fr_420px] min-h-0">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] min-h-0 min-w-0">
         {/* Left: search + cart */}
-        <div className="flex flex-col min-h-0 border-r">
+        <div className="flex flex-col min-h-0 min-w-0 border-r">
           <div className="p-4 border-b space-y-3 bg-background">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
+            <div className="flex gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-0 basis-full sm:basis-auto">
                 <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   ref={searchRef}
@@ -354,6 +358,7 @@ function Billing() {
                   autoFocus
                 />
               </div>
+              <VoiceSearch onResult={(text) => { setSearch(text); setHighlight(0); searchRef.current?.focus(); }} />
               <Button onClick={() => setScanOpen(true)} className="h-11">
                 <CameraIcon className="size-4" /> Scan
               </Button>
@@ -386,6 +391,7 @@ function Billing() {
             )}
           </div>
 
+          <BillingFavourites products={products} onAdd={addProduct} />
           <div className="flex-1 overflow-auto p-4">
             {cart.length === 0 ? (
               <div className="h-full grid place-items-center text-center text-muted-foreground">
@@ -819,8 +825,6 @@ function PaymentDialog({
     }
   };
 
-  const quickPaid = [due, Math.ceil(due / 100) * 100, Math.ceil(due / 500) * 500];
-
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !loading && onClose()}>
       <DialogContent className="max-w-md">
@@ -837,12 +841,12 @@ function PaymentDialog({
           <TabsContent value="cash" className="space-y-3 pt-4">
             <div>
               <Label>Cash received</Label>
-              <Input type="number" value={paid} onChange={(e) => setPaid(e.target.value)} className="h-11 text-lg" />
+              <Input aria-label="Cash received" type="number" value={paid} onChange={(e) => setPaid(e.target.value)} className="h-11 text-lg" />
             </div>
             <div className="flex gap-2 flex-wrap">
-              {[...new Set(quickPaid)].map((v) => (
-                <Button key={v} type="button" variant="outline" size="sm" onClick={() => setPaid(v.toFixed(2))}>{inr(v)}</Button>
-              ))}
+              <Button type="button" variant="outline" size="sm" onClick={() => setPaid(due.toFixed(2))}>Exact</Button>
+              {[100, 200, 500].map((value) => <Button key={value} type="button" variant="outline" size="sm" onClick={() => setPaid(cashTender(due, paidNum, value).toFixed(2))}>+Rs.{value}</Button>)}
+              <Button type="button" variant="outline" size="sm" onClick={() => setPaid("2000.00")}>Rs.2000</Button>
             </div>
             <div className="flex justify-between rounded-md bg-muted p-3">
               <span className="text-sm text-muted-foreground">Change</span>

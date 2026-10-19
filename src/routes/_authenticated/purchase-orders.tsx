@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute } from "@tanstack/react-router";
 import { logActivity } from "@/lib/activity-log";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,7 +20,7 @@ import { Plus, Printer, Trash2, ClipboardList, Pencil, CheckCircle2, XCircle } f
 export const Route = createFileRoute("/_authenticated/purchase-orders")({
   ssr: false,
   component: PurchaseOrdersPage,
-  head: () => ({ meta: [{ title: "Purchase Orders — Bazaar POS" }] }),
+  head: () => pageMeta("Purchase Orders — Bazaar POS", "Create and track supplier purchase orders."),
 });
 
 type POItem = { id?: string; product_id: string | null; product_name: string; qty: number; unit: string | null; unit_cost: number; mrp: number; weight_g: number | null; notes: string | null };
