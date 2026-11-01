@@ -1,6 +1,6 @@
 import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useStoreId } from "@/lib/active-store";
@@ -14,6 +14,8 @@ import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { useShopSettings } from "@/lib/shop-settings";
 import { Plus, Search, Pencil, Trash2 } from "lucide-react";
+import { CustomerDetails } from "@/components/customer-details";
+import { loyaltyEligible } from "@/lib/loyalty-rules";
 
 export const Route = createFileRoute("/_authenticated/customers")({
   ssr: false,
@@ -30,6 +32,8 @@ function CustomersPage() {
   const [editing, setEditing] = useState<Customer | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", notes: "" });
   const storeId = useStoreId();
+  const [selected, setSelected] = useState<string | null>(null);
+  useEffect(() => { setSelected(null); setOpen(false); }, [storeId]);
 
   const q = useQuery({
     queryKey: ["customers", storeId],
@@ -50,7 +54,8 @@ function CustomersPage() {
   const openEdit = (c: Customer) => { setEditing(c); setForm({ name: c.name, phone: c.phone ?? "", email: c.email ?? "", notes: c.notes ?? "" }); setOpen(true); };
   const save = async () => {
     if (!form.name.trim()) return toast.error("Name required");
-    const payload = { name: form.name.trim(), phone: form.phone || null, email: form.email || null, notes: form.notes || null, store_id: storeId };
+  if (editing?.loyalty_enabled && !loyaltyEligible(form.phone)) return toast.error("A loyalty member needs a phone number");
+  const payload = { name: form.name.trim(), phone: form.phone.trim() || null, email: form.email.trim() || null, notes: form.notes.trim() || null, store_id: storeId };
     const res = editing ? await supabase.from("customers").update(payload).eq("id", editing.id) : await supabase.from("customers").insert(payload);
     if (res.error) return toast.error(res.error.message);
     toast.success(editing ? "Updated" : "Added");
@@ -72,7 +77,7 @@ function CustomersPage() {
   };
 
   return (
-    <div className="p-6 lg:p-8 space-y-4 max-w-5xl">
+    <div className="p-4 lg:p-8 space-y-4 max-w-5xl">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Customers</h1>
@@ -88,26 +93,26 @@ function CustomersPage() {
         </div>
       </Card>
 
-      <Card className="p-0 overflow-hidden">
-        {!filtered.length ? <div className="p-8 text-center text-sm text-muted-foreground">No customers.</div> : (
+      <Card className="p-0 overflow-x-auto">
+        {q.isLoading ? <div className="p-8 text-center text-sm text-muted-foreground">Loading customers…</div> : q.error ? <div className="p-8 text-destructive">Unable to load customers.</div> : !filtered.length ? <div className="p-8 text-center text-sm text-muted-foreground">No customers.</div> : (
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left"><tr><th className="px-4 py-2.5">Name</th><th className="px-4 py-2.5">Phone</th><th className="px-4 py-2.5">Email</th><th className="px-4 py-2.5">Notes</th><th className="px-4 py-2.5">Loyalty</th><th></th></tr></thead>
             <tbody className="divide-y">{filtered.map((c) => (
               <tr key={c.id}>
-                <td className="px-4 py-3 font-medium">{c.name}</td>
+                <td className="px-4 py-3 font-medium"><Button variant="link" className="h-auto p-0 text-left whitespace-normal" onClick={() => setSelected(c.id)}>{c.name}</Button></td>
                 <td className="px-4 py-3">{c.phone ?? "—"}</td>
                 <td className="px-4 py-3 text-muted-foreground">{c.email ?? "—"}</td>
                 <td className="px-4 py-3 text-muted-foreground truncate max-w-xs">{c.notes ?? "—"}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <Switch checked={c.loyalty_enabled} onCheckedChange={(v) => toggleLoyalty(c, v)} disabled={!c.phone} title={c.phone ? "" : "Needs phone number"} />
+                    <Switch aria-label={`Loyalty for ${c.name}`} checked={c.loyalty_enabled} onCheckedChange={(v) => toggleLoyalty(c, v)} disabled={!loyaltyEligible(c.phone)} title={c.phone ? "" : "Needs phone number"} />
                     {c.loyalty_enabled ? <span className="text-xs tabular-nums">{Number(c.loyalty_points)} pts</span>
                       : c.phone ? <Button size="sm" variant="link" className="h-auto p-0 text-xs" onClick={() => toggleLoyalty(c, true)}>Add to loyalty</Button> : null}
                   </div>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <Button size="icon" variant="ghost" onClick={() => openEdit(c)}><Pencil className="size-4" /></Button>
-                  <Button size="icon" variant="ghost" className="text-destructive" onClick={() => remove(c)}><Trash2 className="size-4" /></Button>
+                  <Button size="icon" variant="ghost" aria-label={`Edit ${c.name}`} title="Edit customer" onClick={() => openEdit(c)}><Pencil className="size-4" /></Button>
+                  <Button size="icon" variant="ghost" className="text-destructive" aria-label={`Delete ${c.name}`} title="Delete customer" onClick={() => remove(c)}><Trash2 className="size-4" /></Button>
                 </td>
               </tr>
             ))}</tbody>
@@ -127,6 +132,7 @@ function CustomersPage() {
           <DialogFooter><Button onClick={save}>Save</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+      <CustomerDetails customerId={selected} onClose={() => setSelected(null)} />
     </div>
   );
 }
