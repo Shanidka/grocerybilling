@@ -22,6 +22,13 @@
       "when": 1793499839407,
       "tag": "0002_phase_two_credit_and_cash_counts",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793499928677,
+      "tag": "0003_restrict_credit_terms_and_validate_caps",
+      "breakpoints": true
     }
   ]
 }

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { logActivity } from "@/lib/activity-log";
 
 export function LoyaltySettings() {
   const qc = useQueryClient();
@@ -33,6 +34,7 @@ export function LoyaltySettings() {
     try {
       const { error } = await supabase.from("shop_settings").update({ loyalty_enabled: on, loyalty_earn_per: e, loyalty_point_value: 1 / p }).eq("id", 1);
       if (error) throw error;
+      void logActivity("settings", "loyalty-settings", "Updated loyalty program settings", { details: { enabled: on, earnPer: e, pointsPerRupee: p } });
       toast.success("Loyalty settings saved");
       await qc.invalidateQueries({ queryKey: ["shop-settings"] });
     } catch (e) { toast.error(e instanceof Error ? e.message : "Unable to save loyalty settings"); }

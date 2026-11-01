@@ -28,6 +28,8 @@ export function useLoyaltyMembership() {
     if (enabled && !loyaltyEligible(customer.phone)) throw new Error("Add a phone number before joining loyalty");
     const { error } = await supabase.from("customers").update({ loyalty_enabled: enabled }).eq("id", customer.id).eq("store_id", storeId);
     if (error) throw error;
+    const { logActivity } = await import("./activity-log");
+    void logActivity("customers", "loyalty-membership", `${customer.name}: loyalty ${enabled ? "enabled" : "disabled"}`, { entityId: customer.id, storeId });
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["customers"] }),
       qc.invalidateQueries({ queryKey: ["loyalty-member"] }),

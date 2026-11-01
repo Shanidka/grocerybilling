@@ -14,3 +14,7 @@
 - Purchases update `products.avg_cost` via trigger and never touch selling price. Why: loose items keep one fixed selling price.
 - Billing favourites are stored on each store and edited through its existing manager/admin write policy; billing reads cached store data. Why: shared picks stay store-specific and remain available offline.
 - Voice recognition is instantiated only after a microphone action and populates search, never the cart. Why: browser support varies and ambiguous product names require a biller choice.
+- Loyalty customer history and membership use shared customer queries and a shared program-settings control. Why: Customers, Loyalty and Settings must stay consistent.
+- Customer credit caps are optional and enforced by a sales trigger; credit rejections must never become offline bills. Why: UI checks and network fallback cannot bypass configured limits.
+- Cash counts are immutable store/day snapshots submitted through an authorized RPC, with India-time boundaries and manager-only expected totals. Why: closing records must be auditable and cashier submissions must not disclose expected amounts.
+- Loyalty navigation inherits Customers access until an explicit Loyalty page permission is configured. Why: adding a page must not hide it from existing customer-access designations.

@@ -26,6 +26,8 @@ import QRCode from "qrcode";
 import { VoiceSearch } from "@/components/voice-search";
 import { BillingFavourites } from "@/components/billing-favourites";
 import { cashTender } from "@/lib/cash-tender";
+import { useCustomers } from "@/lib/customers";
+import { creditAvailable } from "@/lib/credit-rules";
 
 
 export const Route = createFileRoute("/_authenticated/billing")({
@@ -598,6 +600,24 @@ function PaymentDialog({
   const { storeId, store } = useActiveStore();
   const qc = useQueryClient();
   // Store-level identity overrides the organization defaults on receipts and UPI QR
+  const { data: customers } = useCustomers();
+  const creditKey = (customerPhone || customerName || "Walk-in").toLowerCase();
+  const creditCustomer = customers?.find((c) => (c.phone || c.name).toLowerCase() === creditKey);
+  const creditBalance = useQuery({
+    queryKey: ["billing-credit", storeId, creditKey],
+    enabled: open && Boolean(creditCustomer?.credit_limit != null),
+    queryFn: async () => {
+      const [sales, collections] = await Promise.all([
+        supabase.from("sales").select("customer_phone,customer_name,credit_amount").eq("store_id", storeId).gt("credit_amount", 0),
+        supabase.from("credit_collections").select("amount").eq("store_id", storeId).eq("customer_key", creditKey),
+      ]);
+      if (sales.error) throw sales.error;
+      if (collections.error) throw collections.error;
+      const used = (sales.data ?? []).filter((s) => (s.customer_phone || s.customer_name || "Walk-in").toLowerCase() === creditKey).reduce((s, r) => s + Number(r.credit_amount), 0);
+      return Math.max(0, used - (collections.data ?? []).reduce((s, r) => s + Number(r.amount), 0));
+    },
+    staleTime: 0,
+  });
   const shop = shopBase || store
     ? {
         shop_name: store?.name || shopBase?.shop_name || "",
@@ -659,6 +679,8 @@ function PaymentDialog({
   const splitPaid = splitCash + splitCard + splitUpi;
   const splitCovered = splitPaid + splitCredit;
   const splitRemaining = Math.round((due - splitCovered) * 100) / 100;
+  const availableCredit = creditAvailable(creditCustomer?.credit_limit ?? null, creditBalance.data ?? 0);
+  const creditBlocked = mode === "split" && splitCredit > 0 && availableCredit !== null && (creditBalance.isLoading || Boolean(creditBalance.error) || splitCredit > availableCredit + 0.01);
 
   const paidNum = Number(paid) || 0;
   const change = mode === "split"
@@ -724,6 +746,8 @@ function PaymentDialog({
       let saleId: string | null = null;
       let created_at = new Date().toISOString();
       let offline = typeof navigator !== "undefined" && !navigator.onLine;
+      if (creditBlocked) throw new Error("Customer credit limit exceeded or credit balance unavailable");
+      if (offline && split.credit_amount > 0 && creditCustomer?.credit_limit != null) throw new Error("Reconnect to record credit for a customer with a credit limit");
 
       if (!offline) {
         try {
@@ -742,7 +766,8 @@ function PaymentDialog({
             .from("sale_items")
             .insert(itemRows.map((i) => ({ ...i, sale_id: saleRow.id })) as never);
           if (itemsErr) throw itemsErr;
-        } catch {
+        } catch (error) {
+          if (saleId || split.credit_amount > 0) throw error;
           offline = true;
         }
       }
@@ -768,6 +793,8 @@ function PaymentDialog({
           await supabase.from("loyalty_transactions").insert(rows);
           loyaltyBalance = Math.max(0, member.data.points - redeem) + earned;
           qc.invalidateQueries({ queryKey: ["loyalty-member"] });
+          qc.invalidateQueries({ queryKey: ["customers"] });
+          qc.invalidateQueries({ queryKey: ["loyalty-history"] });
         } catch { /* non-blocking */ }
       }
 
@@ -816,6 +843,9 @@ function PaymentDialog({
 
       void logActivity("billing", offline ? "sale-offline" : "sale", `Bill ${bill_no} — ${cart.length} item(s), total ${due.toFixed(2)} (${mode})`, { entityId: bill_no, details: { total: due, items: cart.length, payment_mode: mode, customer: customerName || null, offline } });
       if (!offline) toast.success(`Bill ${bill_no} completed`);
+      qc.invalidateQueries({ queryKey: ["customers"] });
+      qc.invalidateQueries({ queryKey: ["billing-credit"] });
+      qc.invalidateQueries({ queryKey: ["credit-sales"] });
       onCompleted(bill_no, customerPhone, due, receipt, action);
       onClose();
     } catch (e: unknown) {
@@ -894,6 +924,7 @@ function PaymentDialog({
             {splitCredit > 0 && !customerName.trim() && !customerPhone.trim() && (
               <p className="text-xs text-destructive">Add a customer name or phone before recording credit.</p>
             )}
+            {availableCredit !== null && <p className={`text-sm ${creditBlocked ? "text-destructive" : "text-muted-foreground"}`}>{creditBalance.isLoading ? "Checking credit balance…" : creditBalance.error ? "Credit balance unavailable" : `Available credit: ${inr(availableCredit)}`}{creditBlocked && !creditBalance.isLoading && !creditBalance.error ? " · Credit limit exceeded" : ""}</p>}
             {splitUpi > 0 && upiQr && <img src={upiQr} alt="UPI QR" className="mx-auto rounded-md border" />}
           </TabsContent>
         </Tabs>
@@ -912,13 +943,13 @@ function PaymentDialog({
 
         <DialogFooter className="gap-2 flex-wrap sm:justify-end">
           <Button variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button variant="secondary" onClick={() => complete("none")} disabled={loading || insufficient}>
+          <Button variant="secondary" onClick={() => complete("none")} disabled={loading || insufficient || creditBlocked}>
             {loading ? <Loader2 className="size-4 animate-spin" /> : null} Complete
           </Button>
-          <Button variant="secondary" onClick={() => complete("share")} disabled={loading || insufficient}>
+          <Button variant="secondary" onClick={() => complete("share")} disabled={loading || insufficient || creditBlocked}>
             <MessageCircle className="size-4" /> Complete & Share
           </Button>
-          <Button onClick={() => complete("print")} disabled={loading || insufficient}>
+          <Button onClick={() => complete("print")} disabled={loading || insufficient || creditBlocked}>
             <Printer className="size-4" /> Complete & Print
           </Button>
         </DialogFooter>
