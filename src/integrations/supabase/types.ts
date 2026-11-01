@@ -88,6 +88,65 @@ export type Database = {
         }
         Relationships: []
       }
+      cash_closings: {
+        Row: {
+          business_date: string
+          cash_collections: number
+          cash_expenses: number
+          cash_payouts: number
+          cash_sales: number
+          counted_cash: number
+          created_at: string
+          created_by: string
+          expected_cash: number
+          id: string
+          notes: string | null
+          opening_float: number
+          store_id: string
+          variance: number
+        }
+        Insert: {
+          business_date: string
+          cash_collections: number
+          cash_expenses: number
+          cash_payouts?: number
+          cash_sales: number
+          counted_cash: number
+          created_at?: string
+          created_by: string
+          expected_cash: number
+          id?: string
+          notes?: string | null
+          opening_float: number
+          store_id: string
+          variance: number
+        }
+        Update: {
+          business_date?: string
+          cash_collections?: number
+          cash_expenses?: number
+          cash_payouts?: number
+          cash_sales?: number
+          counted_cash?: number
+          created_at?: string
+          created_by?: string
+          expected_cash?: number
+          id?: string
+          notes?: string | null
+          opening_float?: number
+          store_id?: string
+          variance?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_closings_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           created_at: string
@@ -169,6 +228,8 @@ export type Database = {
       customers: {
         Row: {
           created_at: string
+          credit_days: number
+          credit_limit: number | null
           email: string | null
           id: string
           loyalty_enabled: boolean
@@ -181,6 +242,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          credit_days?: number
+          credit_limit?: number | null
           email?: string | null
           id?: string
           loyalty_enabled?: boolean
@@ -193,6 +256,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          credit_days?: number
+          credit_limit?: number | null
           email?: string | null
           id?: string
           loyalty_enabled?: boolean
@@ -1346,6 +1411,17 @@ export type Database = {
       is_staff: { Args: { _user_id: string }; Returns: boolean }
       next_bill_no: { Args: never; Returns: string }
       next_po_no: { Args: never; Returns: string }
+      submit_cash_closing: {
+        Args: {
+          _counted: number
+          _day: string
+          _notes?: string
+          _opening: number
+          _payouts: number
+          _store: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role:

@@ -12,7 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { inr, dt } from "@/lib/format";
-import { HandCoins, Phone, ChevronDown, IndianRupee } from "lucide-react";
+import { HandCoins, Phone, ChevronDown, IndianRupee, MessageCircle } from "lucide-react";
+import { useCustomers } from "@/lib/customers";
+import { useActiveStore } from "@/lib/active-store";
+import { creditAging } from "@/lib/credit-rules";
+import { waNumber } from "@/lib/bill-folder";
 
 export const Route = createFileRoute("/_authenticated/credit")({
   ssr: false,
@@ -34,6 +38,8 @@ function CreditPage() {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [openKey, setOpenKey] = useState<string | null>(null);
+  const { data: customers } = useCustomers();
+  const { store } = useActiveStore();
 
   const [collect, setCollect] = useState<{ key: string; name: string; phone: string | null; due: number } | null>(null);
 
@@ -85,11 +91,13 @@ function CreditPage() {
     return Array.from(map.values())
       .map((g) => {
         const collected = paidByKey.get(g.key) ?? 0;
-        return { ...g, collected, due: Math.max(0, g.total - collected) };
+        const customer = customers?.find((c) => (c.phone || c.name).toLowerCase() === g.key);
+        const aging = creditAging(g.bills, collected, customer?.credit_days ?? 30);
+        return { ...g, collected, due: Math.max(0, g.total - collected), ...aging, creditLimit: customer?.credit_limit ?? null };
       })
       .filter((g) => !term || g.name.toLowerCase().includes(term) || (g.phone ?? "").includes(term))
       .sort((a, b) => b.due - a.due);
-  }, [list.data, q, paidByKey]);
+  }, [list.data, q, paidByKey, customers]);
 
   const outstanding = groups.reduce((s, g) => s + g.due, 0);
   const collectedTotal = groups.reduce((s, g) => s + g.collected, 0);
@@ -127,7 +135,7 @@ function CreditPage() {
           <div className="divide-y">
             {groups.map((g) => (
               <div key={g.key}>
-                <div className="w-full px-4 py-3 flex items-center gap-3 hover:bg-muted/40">
+                <div className="w-full px-4 py-3 flex flex-wrap items-center gap-3 hover:bg-muted/40">
                   <button
                     type="button"
                     onClick={() => setOpenKey(openKey === g.key ? null : g.key)}
@@ -139,7 +147,13 @@ function CreditPage() {
                       {g.collected > 0 && <> · paid {inr(g.collected)}</>}
                     </div>
                   </button>
-                  <div className="text-right tabular-nums font-semibold">{inr(g.due)}</div>
+                  <div className="text-right tabular-nums"><div className="font-semibold">{inr(g.due)}</div>{g.overdue > 0 && <div className="text-xs text-destructive">Overdue {inr(g.overdue)}</div>}{g.creditLimit !== null && <div className="text-xs text-muted-foreground">Limit {inr(g.creditLimit)}</div>}</div>
+                  <Button size="icon" variant="outline" title="WhatsApp reminder" aria-label={`WhatsApp reminder for ${g.name}`} disabled={g.due <= 0.01 || !waNumber(g.phone ?? "")} onClick={() => {
+                    const phone = waNumber(g.phone ?? "");
+                    if (!phone) return;
+                    const message = `Hello ${g.name}, your outstanding balance at ${store?.name || "our store"} is Rs.${g.due.toFixed(2)}.${g.overdue > 0 ? ` Overdue: Rs.${g.overdue.toFixed(2)}.` : ""} Please arrange payment. Thank you.`;
+                    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
+                  }}><MessageCircle className="size-4" /></Button>
                   <Button
                     size="sm"
                     disabled={g.due <= 0.01}

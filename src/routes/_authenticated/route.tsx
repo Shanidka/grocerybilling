@@ -1,7 +1,7 @@
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff, Package, Settings as SettingsIcon, AlertTriangle, BarChart3, Boxes, Users, Truck, UserCog, ClipboardList, Wallet, FileText, Store, Check, ChevronsUpDown, ChevronRight, ChevronLeft, BookOpen, HandCoins, TrendingUp, Printer } from "lucide-react";
+import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff, Package, Settings as SettingsIcon, AlertTriangle, BarChart3, Boxes, Users, Truck, UserCog, ClipboardList, Wallet, FileText, Store, Check, ChevronsUpDown, ChevronRight, ChevronLeft, BookOpen, HandCoins, TrendingUp, Printer, Gift } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useMyRoles } from "@/hooks/use-role";
@@ -49,6 +49,7 @@ const NAV: NavGroup[] = [
     { to: "/billing", page: "billing", label: "Billing", icon: ScanBarcode },
     { to: "/day-book", page: "day-book", label: "Day Book", icon: BookOpen },
     { to: "/customers", page: "customers", label: "Customers", icon: Users },
+    { to: "/loyalty", page: "loyalty", label: "Loyalty", icon: Gift },
     { to: "/credit", page: "credit", label: "Credit", icon: HandCoins },
     { to: "/reports", page: "reports", label: "Reports", icon: BarChart3 },
     { to: "/trends", page: "trends", label: "Trends", icon: TrendingUp },

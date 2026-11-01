@@ -9,6 +9,7 @@ export const PAGES = [
   { key: "billing", label: "Billing" },
   { key: "day-book", label: "Day Book" },
   { key: "customers", label: "Customers" },
+  { key: "loyalty", label: "Loyalty" },
   { key: "credit", label: "Credit" },
   { key: "reports", label: "Reports" },
   { key: "trends", label: "Trends" },
@@ -81,7 +82,8 @@ export function useAccess() {
   const can = (page: string) => {
     if (isAdmin) return true;
     if (!keys.length) return false;
-    const relevant = rows.filter((r) => keys.includes(r.role_key) && r.page === page);
+    const resolvedPage = page === "loyalty" && !rows.some((r) => keys.includes(r.role_key) && r.page === "loyalty") ? "customers" : page;
+    const relevant = rows.filter((r) => keys.includes(r.role_key) && r.page === resolvedPage);
     if (!relevant.length) return false;
     return relevant.some((r) => r.allowed);
   };

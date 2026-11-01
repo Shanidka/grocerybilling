@@ -11,11 +11,10 @@
 - [x] Phase 1: Remove invoice QR, voice product search, store favourites in Settings, quick cash buttons
 
 ## Current work
-- [ ] Open customer details and add a dedicated Loyalty tab for membership, history and program settings
-- [ ] Phase 2: credit overdue alerts and WhatsApp reminders
-- [ ] Phase 2: blind drawer reconciliation and credit limits
-- [ ] Phase 2: automated email reports (requires sender setup and supported scheduling)
+- [x] Open customer details and add a dedicated Loyalty tab for membership, history and program settings
+- [x] Phase 2: credit overdue alerts and WhatsApp reminders
+- [x] Phase 2: count-first drawer reconciliation and optional credit limits
+- [ ] Phase 2: automated email reports — blocked by missing owned sender domain and managed HTTP scheduling unavailable in this project
 
 ## Later phases
-- Phase 2: Automated daily/weekly/monthly/yearly email reports with add/remove recipients (sender setup required); blind drawer reconciliation; credit limits/overdue alerts; WhatsApp reminders
 - Phase 3: Scale barcode formats; expiry markdown suggestions; GSTR-1/GSTR-3B summaries
