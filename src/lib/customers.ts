@@ -6,6 +6,7 @@ import { loyaltyEligible } from "./loyalty-rules";
 export type Customer = {
   id: string; name: string; phone: string | null; email: string | null; notes: string | null;
   loyalty_enabled: boolean; loyalty_points: number;
+  credit_limit: number | null; credit_days: number;
 };
 
 export function useCustomers() {

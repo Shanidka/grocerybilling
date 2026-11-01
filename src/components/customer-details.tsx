@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Loader2, Save } from "lucide-react";
 import { dt, num } from "@/lib/format";
 import { toast } from "sonner";
+import { CustomerCreditSettings } from "@/components/customer-credit-settings";
 
 export function CustomerDetails({ customerId, onClose }: { customerId: string | null; onClose: () => void }) {
   const storeId = useStoreId();
@@ -55,7 +56,7 @@ export function CustomerDetails({ customerId, onClose }: { customerId: string | 
     <DialogContent className="max-w-xl max-h-[85dvh] overflow-y-auto">
       <DialogHeader><DialogTitle>{customer?.name ?? "Customer details"}</DialogTitle><DialogDescription>{customer?.phone || "No phone number"}</DialogDescription></DialogHeader>
       {!customer ? <p className="text-muted-foreground">{customers.isLoading ? "Loading customer…" : "Customer unavailable in this branch."}</p> : <Tabs defaultValue="loyalty" key={`${storeId}-${customer.id}`}>
-        <TabsList><TabsTrigger value="loyalty">Loyalty</TabsTrigger><TabsTrigger value="contact">Contact details</TabsTrigger></TabsList>
+        <TabsList><TabsTrigger value="loyalty">Loyalty</TabsTrigger><TabsTrigger value="contact">Contact details</TabsTrigger><TabsTrigger value="credit">Credit terms</TabsTrigger></TabsList>
         <TabsContent value="loyalty" className="space-y-5 pt-3">
           <div className="flex items-center justify-between gap-3"><Label htmlFor="customer-membership">Loyalty membership</Label><Switch id="customer-membership" checked={customer.loyalty_enabled} disabled={busy || !loyaltyEligible(customer.phone)} onCheckedChange={async (v) => {
             setBusy(true); try { await membership(customer, v); toast.success(v ? "Customer joined loyalty" : "Membership disabled"); } catch (e) { toast.error(e instanceof Error ? e.message : "Unable to update membership"); } finally { setBusy(false); }
@@ -72,6 +73,7 @@ export function CustomerDetails({ customerId, onClose }: { customerId: string | 
             <span className="shrink-0 font-medium tabular-nums">{t.kind === "redeem" ? "−" : Number(t.points) >= 0 ? "+" : ""}{num(t.kind === "redeem" ? Math.abs(Number(t.points)) : Number(t.points))} pts</span>
           </div>)}</div>}
         </TabsContent>
+        <TabsContent value="credit" className="pt-3"><CustomerCreditSettings customerId={customer.id} /></TabsContent>
         <TabsContent value="contact" className="space-y-4 pt-3">
           <div className="space-y-1.5"><Label htmlFor="detail-name">Name *</Label><Input id="detail-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
           <div className="space-y-1.5"><Label htmlFor="detail-phone">Phone</Label><Input id="detail-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>

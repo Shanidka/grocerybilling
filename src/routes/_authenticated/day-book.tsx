@@ -10,6 +10,7 @@ import { inr } from "@/lib/format";
 import { reprintSale } from "@/lib/reprint";
 import { toast } from "sonner";
 import { BookOpen, Printer } from "lucide-react";
+import { CashCount } from "@/components/cash-count";
 
 export const Route = createFileRoute("/_authenticated/day-book")({
   ssr: false,
@@ -83,7 +84,7 @@ function DayBook() {
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2"><BookOpen className="size-6" /> Day Book</h1>
           <p className="text-sm text-muted-foreground">All sales and expenses for a day or a date range.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Input type="date" className="w-40" value={day} onChange={(e) => { const v = e.target.value; setDay(v); if (v > dayTo) setDayTo(v); }} />
           <span className="text-muted-foreground text-sm">→</span>
           <Input type="date" className="w-40" value={dayTo} min={day} onChange={(e) => setDayTo(e.target.value)} />
@@ -92,6 +93,7 @@ function DayBook() {
         </div>
       </div>
 
+      <CashCount />
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Box label="Money in (sales)" value={inr(t.gross)} sub={`${t.bills} bills`} />
         <Box label="Money out (expenses)" value={inr(t.out)} sub={`${expenses.data?.length ?? 0} entries`} />
