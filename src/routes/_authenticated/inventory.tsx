@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { inr } from "@/lib/format";
+import { calcTaxAmount, purchaseLineTotal } from "@/lib/purchase-tax";
 import {
   Plus, Camera, Upload, Loader2, Boxes, Truck, Sliders, PackageX,
   Undo2, AlertTriangle, CalendarClock, ChevronDown, ShoppingCart, Trash2,
@@ -263,9 +264,6 @@ type PurchaseRow = {
   hsn: string; mrp: string; tax_pct: string; tax_amount: string; barcode: string;
 };
 
-const reTax = (idx: number, p: Partial<PurchaseRow>) => (r: PurchaseRow, i: number) =>
-  i === idx ? (() => { const merged = { ...r, ...p }; return { ...merged, tax_amount: String(calcTaxAmount(Number(merged.qty), Number(merged.cost), Number(merged.tax_pct))) }; })() : r;
-
 function PurchasesTab() {
   const qc = useQueryClient();
   const { data: products } = useProductsList();
@@ -274,7 +272,7 @@ function PurchasesTab() {
   const q = useQuery({
     queryKey: ["inv-purchases", storeId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("purchase_entries").select("id,supplier,invoice_no,total,created_at,purchase_items(id,name,qty,cost)").eq("store_id", storeId).order("created_at", { ascending: false }).limit(50);
+      const { data, error } = await supabase.from("purchase_entries").select("id,supplier,invoice_no,total,tax_total,created_at,purchase_items(id,name,qty,cost,tax_pct,tax_amount,line_total)").eq("store_id", storeId).order("created_at", { ascending: false }).limit(50);
       if (error) throw error;
       return data ?? [];
     },
