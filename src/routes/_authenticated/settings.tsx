@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { FavouritesSettings } from "@/components/billing-favourites";
 import { LoyaltySettings } from "@/components/loyalty-settings";
+import { EmailReportSettings } from "@/components/email-report-settings";
 import { chooseBillFolder, getBillFolderName, clearBillFolder, folderPickerSupported } from "@/lib/bill-folder";
 
 export const Route = createFileRoute("/_authenticated/settings")({
