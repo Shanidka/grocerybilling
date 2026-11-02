@@ -486,7 +486,8 @@ function PurchasesTab() {
                     <td className="px-4 py-3">{r.supplier ?? "—"}</td>
                     <td className="px-4 py-3">{r.invoice_no ?? "—"}</td>
                     <td className="px-4 py-3">{r.purchase_items?.length ?? 0}</td>
-                    <td className="px-4 py-3">{inr(r.total)}</td>
+                    <td className="px-4 py-3">{inr((r as { tax_total?: number }).tax_total ?? 0)}</td>
+                    <td className="px-4 py-3 font-medium">{inr(r.total)}</td>
                   </tr>
                 ))}
               </tbody>
