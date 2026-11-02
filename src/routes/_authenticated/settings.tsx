@@ -94,6 +94,7 @@ function SettingsPage() {
       </Card>
 
       <Card className="p-6 mt-6"><LoyaltySettings /></Card>
+      <Card className="p-6 mt-6"><EmailReportSettings /></Card>
       <FavouritesSettings />
       <BillFolderCard />
       <StoresCard />
