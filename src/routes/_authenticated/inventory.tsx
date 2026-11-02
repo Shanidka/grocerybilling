@@ -286,7 +286,13 @@ function PurchasesTab() {
   const ocrFn = useServerFn(extractInvoice);
 
   const patch = (idx: number, p: Partial<PurchaseRow>) =>
-    setItems((arr) => arr.map((r, i) => (i === idx ? { ...r, ...p } : r)));
+    setItems((arr) => arr.map((r, i) => {
+      if (i !== idx) return r;
+      const merged = { ...r, ...p };
+      if ("tax_amount" in p) return merged; // manual tax amount override
+      // Tax amount follows qty / cost / tax %
+      return { ...merged, tax_amount: String(calcTaxAmount(Number(merged.qty), Number(merged.cost), Number(merged.tax_pct))) };
+    }));
 
   const handleOcr = async (file: File) => {
     if (file.size > 8 * 1024 * 1024) return toast.error("File too large (max 8 MB)");
@@ -310,6 +316,7 @@ function PurchasesTab() {
         const p = byBarcode ?? byName;
         const qty = Number(it.qty) || 1;
         const cost = Number(it.cost) || Number(p?.purchase_price) || 0;
+        const taxPct = Number(it.tax_pct ?? 0) || 0;
         return {
           product_id: p?.id ?? "",
           name: p?.name ?? it.name,
@@ -318,6 +325,7 @@ function PurchasesTab() {
           hsn: it.hsn ?? "",
           mrp: String(it.mrp ?? p?.mrp ?? ""),
           tax_pct: String(it.tax_pct ?? ""),
+          tax_amount: String(calcTaxAmount(qty, cost, taxPct)),
           barcode: it.barcode ?? p?.barcode ?? "",
         };
       });
@@ -332,8 +340,9 @@ function PurchasesTab() {
     }
   };
 
-  const addRow = () => setItems((i) => [...i, { product_id: "", name: "", qty: "1", cost: "0", hsn: "", mrp: "", tax_pct: "", barcode: "" }]);
-  const total = items.reduce((s, i) => s + Number(i.qty || 0) * Number(i.cost || 0), 0);
+  const addRow = () => setItems((i) => [...i, { product_id: "", name: "", qty: "1", cost: "0", hsn: "", mrp: "", tax_pct: "", tax_amount: "0", barcode: "" }]);
+  const taxTotal = items.reduce((s, i) => s + (Number(i.tax_amount) || 0), 0);
+  const total = items.reduce((s, i) => s + purchaseLineTotal(Number(i.qty), Number(i.cost), Number(i.tax_amount)), 0);
 
   const save = async () => {
     const rows = items.filter((i) => i.product_id && Number(i.qty) > 0);
