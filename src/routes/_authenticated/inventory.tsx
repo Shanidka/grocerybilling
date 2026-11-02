@@ -477,7 +477,7 @@ function PurchasesTab() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-left"><tr>
-                <th className="px-4 py-2.5">Date</th><th className="px-4 py-2.5">Supplier</th><th className="px-4 py-2.5">Invoice</th><th className="px-4 py-2.5">Items</th><th className="px-4 py-2.5">Total</th>
+                <th className="px-4 py-2.5">Date</th><th className="px-4 py-2.5">Supplier</th><th className="px-4 py-2.5">Invoice</th><th className="px-4 py-2.5">Items</th><th className="px-4 py-2.5">Tax</th><th className="px-4 py-2.5">Total</th>
               </tr></thead>
               <tbody className="divide-y">
                 {q.data.map((r) => (
