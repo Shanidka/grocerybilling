@@ -348,7 +348,7 @@ function PurchasesTab() {
     const rows = items.filter((i) => i.product_id && Number(i.qty) > 0);
     if (rows.length === 0) return toast.error("Add at least one item (or save unmatched lines as products first)");
     const { data: userData } = await supabase.auth.getUser();
-    const { data: entry, error } = await supabase.from("purchase_entries").insert({ store_id: storeId, supplier, invoice_no: invoice, total, created_by: userData.user!.id }).select().single();
+    const { data: entry, error } = await supabase.from("purchase_entries").insert({ store_id: storeId, supplier, invoice_no: invoice, total, tax_total: taxTotal, created_by: userData.user!.id }).select().single();
     if (error) return toast.error(error.message);
     const { error: e2 } = await supabase.from("purchase_items").insert(
       rows.map((r) => ({
@@ -357,6 +357,8 @@ function PurchasesTab() {
         hsn: r.hsn || null,
         mrp: r.mrp ? Number(r.mrp) : null,
         tax_pct: r.tax_pct ? Number(r.tax_pct) : 0,
+        tax_amount: Number(r.tax_amount) || 0,
+        line_total: purchaseLineTotal(Number(r.qty), Number(r.cost), Number(r.tax_amount)),
       }))
     );
     if (e2) return toast.error(e2.message);
