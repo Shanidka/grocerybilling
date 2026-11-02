@@ -378,6 +378,42 @@ export type Database = {
           },
         ]
       }
+      email_report_recipients: {
+        Row: {
+          created_at: string
+          daily: boolean
+          email: string
+          id: string
+          is_active: boolean
+          monthly: boolean
+          updated_at: string
+          weekly: boolean
+          yearly: boolean
+        }
+        Insert: {
+          created_at?: string
+          daily?: boolean
+          email: string
+          id?: string
+          is_active?: boolean
+          monthly?: boolean
+          updated_at?: string
+          weekly?: boolean
+          yearly?: boolean
+        }
+        Update: {
+          created_at?: string
+          daily?: boolean
+          email?: string
+          id?: string
+          is_active?: boolean
+          monthly?: boolean
+          updated_at?: string
+          weekly?: boolean
+          yearly?: boolean
+        }
+        Relationships: []
+      }
       expenses: {
         Row: {
           amount: number
@@ -716,6 +752,7 @@ export type Database = {
           notes: string | null
           store_id: string | null
           supplier: string | null
+          tax_total: number
           total: number
         }
         Insert: {
@@ -726,6 +763,7 @@ export type Database = {
           notes?: string | null
           store_id?: string | null
           supplier?: string | null
+          tax_total?: number
           total?: number
         }
         Update: {
@@ -736,6 +774,7 @@ export type Database = {
           notes?: string | null
           store_id?: string | null
           supplier?: string | null
+          tax_total?: number
           total?: number
         }
         Relationships: [
@@ -760,6 +799,7 @@ export type Database = {
           name: string
           product_id: string | null
           qty: number
+          tax_amount: number
           tax_pct: number
         }
         Insert: {
@@ -773,6 +813,7 @@ export type Database = {
           name: string
           product_id?: string | null
           qty: number
+          tax_amount?: number
           tax_pct?: number
         }
         Update: {
@@ -786,6 +827,7 @@ export type Database = {
           name?: string
           product_id?: string | null
           qty?: number
+          tax_amount?: number
           tax_pct?: number
         }
         Relationships: [

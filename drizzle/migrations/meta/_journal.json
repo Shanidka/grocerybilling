@@ -29,6 +29,20 @@
       "when": 1793499928677,
       "tag": "0003_restrict_credit_terms_and_validate_caps",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793587527857,
+      "tag": "0004_purchase_tax_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793587536968,
+      "tag": "0005_email_report_recipients",
+      "breakpoints": true
     }
   ]
 }

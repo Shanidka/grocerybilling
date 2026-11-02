@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { inr } from "@/lib/format";
+import { calcTaxAmount, purchaseLineTotal } from "@/lib/purchase-tax";
 import {
   Plus, Camera, Upload, Loader2, Boxes, Truck, Sliders, PackageX,
   Undo2, AlertTriangle, CalendarClock, ChevronDown, ShoppingCart, Trash2,
@@ -260,7 +261,7 @@ function StockTab() {
 /* Purchases */
 type PurchaseRow = {
   product_id: string; name: string; qty: string; cost: string;
-  hsn: string; mrp: string; tax_pct: string; barcode: string;
+  hsn: string; mrp: string; tax_pct: string; tax_amount: string; barcode: string;
 };
 
 function PurchasesTab() {
@@ -271,7 +272,7 @@ function PurchasesTab() {
   const q = useQuery({
     queryKey: ["inv-purchases", storeId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("purchase_entries").select("id,supplier,invoice_no,total,created_at,purchase_items(id,name,qty,cost)").eq("store_id", storeId).order("created_at", { ascending: false }).limit(50);
+      const { data, error } = await supabase.from("purchase_entries").select("id,supplier,invoice_no,total,tax_total,created_at,purchase_items(id,name,qty,cost,tax_pct,tax_amount,line_total)").eq("store_id", storeId).order("created_at", { ascending: false }).limit(50);
       if (error) throw error;
       return data ?? [];
     },
@@ -285,7 +286,13 @@ function PurchasesTab() {
   const ocrFn = useServerFn(extractInvoice);
 
   const patch = (idx: number, p: Partial<PurchaseRow>) =>
-    setItems((arr) => arr.map((r, i) => (i === idx ? { ...r, ...p } : r)));
+    setItems((arr) => arr.map((r, i) => {
+      if (i !== idx) return r;
+      const merged = { ...r, ...p };
+      if ("tax_amount" in p) return merged; // manual tax amount override
+      // Tax amount follows qty / cost / tax %
+      return { ...merged, tax_amount: String(calcTaxAmount(Number(merged.qty), Number(merged.cost), Number(merged.tax_pct))) };
+    }));
 
   const handleOcr = async (file: File) => {
     if (file.size > 8 * 1024 * 1024) return toast.error("File too large (max 8 MB)");
@@ -309,6 +316,7 @@ function PurchasesTab() {
         const p = byBarcode ?? byName;
         const qty = Number(it.qty) || 1;
         const cost = Number(it.cost) || Number(p?.purchase_price) || 0;
+        const taxPct = Number(it.tax_pct ?? 0) || 0;
         return {
           product_id: p?.id ?? "",
           name: p?.name ?? it.name,
@@ -317,6 +325,7 @@ function PurchasesTab() {
           hsn: it.hsn ?? "",
           mrp: String(it.mrp ?? p?.mrp ?? ""),
           tax_pct: String(it.tax_pct ?? ""),
+          tax_amount: String(calcTaxAmount(qty, cost, taxPct)),
           barcode: it.barcode ?? p?.barcode ?? "",
         };
       });
@@ -331,14 +340,15 @@ function PurchasesTab() {
     }
   };
 
-  const addRow = () => setItems((i) => [...i, { product_id: "", name: "", qty: "1", cost: "0", hsn: "", mrp: "", tax_pct: "", barcode: "" }]);
-  const total = items.reduce((s, i) => s + Number(i.qty || 0) * Number(i.cost || 0), 0);
+  const addRow = () => setItems((i) => [...i, { product_id: "", name: "", qty: "1", cost: "0", hsn: "", mrp: "", tax_pct: "", tax_amount: "0", barcode: "" }]);
+  const taxTotal = items.reduce((s, i) => s + (Number(i.tax_amount) || 0), 0);
+  const total = items.reduce((s, i) => s + purchaseLineTotal(Number(i.qty), Number(i.cost), Number(i.tax_amount)), 0);
 
   const save = async () => {
     const rows = items.filter((i) => i.product_id && Number(i.qty) > 0);
     if (rows.length === 0) return toast.error("Add at least one item (or save unmatched lines as products first)");
     const { data: userData } = await supabase.auth.getUser();
-    const { data: entry, error } = await supabase.from("purchase_entries").insert({ store_id: storeId, supplier, invoice_no: invoice, total, created_by: userData.user!.id }).select().single();
+    const { data: entry, error } = await supabase.from("purchase_entries").insert({ store_id: storeId, supplier, invoice_no: invoice, total, tax_total: taxTotal, created_by: userData.user!.id }).select().single();
     if (error) return toast.error(error.message);
     const { error: e2 } = await supabase.from("purchase_items").insert(
       rows.map((r) => ({
@@ -347,6 +357,8 @@ function PurchasesTab() {
         hsn: r.hsn || null,
         mrp: r.mrp ? Number(r.mrp) : null,
         tax_pct: r.tax_pct ? Number(r.tax_pct) : 0,
+        tax_amount: Number(r.tax_amount) || 0,
+        line_total: purchaseLineTotal(Number(r.qty), Number(r.cost), Number(r.tax_amount)),
       }))
     );
     if (e2) return toast.error(e2.message);
@@ -414,9 +426,10 @@ function PurchasesTab() {
                     <Input className="col-span-3" type="number" step="0.01" placeholder="Cost / piece" value={it.cost} onChange={(e) => patch(idx, { cost: e.target.value })} />
                   </div>
                   <div className="grid grid-cols-12 gap-2">
-                    <Input className="col-span-3" placeholder="HSN" value={it.hsn} onChange={(e) => patch(idx, { hsn: e.target.value })} />
-                    <Input className="col-span-3" type="number" step="0.01" placeholder="MRP" value={it.mrp} onChange={(e) => patch(idx, { mrp: e.target.value })} />
+                    <Input className="col-span-2" placeholder="HSN" value={it.hsn} onChange={(e) => patch(idx, { hsn: e.target.value })} />
+                    <Input className="col-span-2" type="number" step="0.01" placeholder="MRP" value={it.mrp} onChange={(e) => patch(idx, { mrp: e.target.value })} />
                     <Input className="col-span-2" type="number" step="0.01" placeholder="Tax %" value={it.tax_pct} onChange={(e) => patch(idx, { tax_pct: e.target.value })} />
+                    <Input className="col-span-2" type="number" step="0.01" placeholder="Tax Rs." title="Purchase tax amount" value={it.tax_amount} onChange={(e) => patch(idx, { tax_amount: e.target.value })} />
                     <Input className="col-span-3" placeholder="Barcode" value={it.barcode} onChange={(e) => patch(idx, { barcode: e.target.value })} />
                     <Button size="icon" variant="ghost" className="col-span-1 text-destructive" onClick={() => setItems((arr) => arr.filter((_, i) => i !== idx))}>
                       <Trash2 className="size-4" />
@@ -424,7 +437,8 @@ function PurchasesTab() {
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-xs text-muted-foreground">
-                      Line total {inr(Number(it.qty || 0) * Number(it.cost || 0))}
+                      Line total {inr(purchaseLineTotal(Number(it.qty), Number(it.cost), Number(it.tax_amount)))}
+                      {Number(it.tax_amount) > 0 ? ` (incl. tax ${inr(Number(it.tax_amount))})` : ""}
                       {it.product_id ? "" : ` · “${it.name || "unnamed"}” is not in your product list`}
                     </div>
                     {!it.product_id && (
@@ -437,7 +451,10 @@ function PurchasesTab() {
               ))}
               {items.length === 0 && <div className="text-sm text-muted-foreground">No rows — add items to the purchase.</div>}
             </div>
-            <div className="text-right font-semibold">Total: {inr(total)}</div>
+            <div className="text-right font-semibold">
+              Total: {inr(total)}
+              {taxTotal > 0 ? <span className="ml-2 text-xs font-normal text-muted-foreground">(incl. purchase tax {inr(taxTotal)})</span> : null}
+            </div>
             <DialogFooter><Button onClick={save}>Save</Button></DialogFooter>
           </DialogContent>
         </Dialog>
@@ -460,7 +477,7 @@ function PurchasesTab() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-left"><tr>
-                <th className="px-4 py-2.5">Date</th><th className="px-4 py-2.5">Supplier</th><th className="px-4 py-2.5">Invoice</th><th className="px-4 py-2.5">Items</th><th className="px-4 py-2.5">Total</th>
+                <th className="px-4 py-2.5">Date</th><th className="px-4 py-2.5">Supplier</th><th className="px-4 py-2.5">Invoice</th><th className="px-4 py-2.5">Items</th><th className="px-4 py-2.5">Tax</th><th className="px-4 py-2.5">Total</th>
               </tr></thead>
               <tbody className="divide-y">
                 {q.data.map((r) => (
@@ -469,7 +486,8 @@ function PurchasesTab() {
                     <td className="px-4 py-3">{r.supplier ?? "—"}</td>
                     <td className="px-4 py-3">{r.invoice_no ?? "—"}</td>
                     <td className="px-4 py-3">{r.purchase_items?.length ?? 0}</td>
-                    <td className="px-4 py-3">{inr(r.total)}</td>
+                    <td className="px-4 py-3">{inr((r as { tax_total?: number }).tax_total ?? 0)}</td>
+                    <td className="px-4 py-3 font-medium">{inr(r.total)}</td>
                   </tr>
                 ))}
               </tbody>
