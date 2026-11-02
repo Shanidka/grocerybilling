@@ -426,9 +426,10 @@ function PurchasesTab() {
                     <Input className="col-span-3" type="number" step="0.01" placeholder="Cost / piece" value={it.cost} onChange={(e) => patch(idx, { cost: e.target.value })} />
                   </div>
                   <div className="grid grid-cols-12 gap-2">
-                    <Input className="col-span-3" placeholder="HSN" value={it.hsn} onChange={(e) => patch(idx, { hsn: e.target.value })} />
-                    <Input className="col-span-3" type="number" step="0.01" placeholder="MRP" value={it.mrp} onChange={(e) => patch(idx, { mrp: e.target.value })} />
+                    <Input className="col-span-2" placeholder="HSN" value={it.hsn} onChange={(e) => patch(idx, { hsn: e.target.value })} />
+                    <Input className="col-span-2" type="number" step="0.01" placeholder="MRP" value={it.mrp} onChange={(e) => patch(idx, { mrp: e.target.value })} />
                     <Input className="col-span-2" type="number" step="0.01" placeholder="Tax %" value={it.tax_pct} onChange={(e) => patch(idx, { tax_pct: e.target.value })} />
+                    <Input className="col-span-2" type="number" step="0.01" placeholder="Tax Rs." title="Purchase tax amount" value={it.tax_amount} onChange={(e) => patch(idx, { tax_amount: e.target.value })} />
                     <Input className="col-span-3" placeholder="Barcode" value={it.barcode} onChange={(e) => patch(idx, { barcode: e.target.value })} />
                     <Button size="icon" variant="ghost" className="col-span-1 text-destructive" onClick={() => setItems((arr) => arr.filter((_, i) => i !== idx))}>
                       <Trash2 className="size-4" />
@@ -436,7 +437,8 @@ function PurchasesTab() {
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-xs text-muted-foreground">
-                      Line total {inr(Number(it.qty || 0) * Number(it.cost || 0))}
+                      Line total {inr(purchaseLineTotal(Number(it.qty), Number(it.cost), Number(it.tax_amount)))}
+                      {Number(it.tax_amount) > 0 ? ` (incl. tax ${inr(Number(it.tax_amount))})` : ""}
                       {it.product_id ? "" : ` · “${it.name || "unnamed"}” is not in your product list`}
                     </div>
                     {!it.product_id && (
@@ -449,7 +451,10 @@ function PurchasesTab() {
               ))}
               {items.length === 0 && <div className="text-sm text-muted-foreground">No rows — add items to the purchase.</div>}
             </div>
-            <div className="text-right font-semibold">Total: {inr(total)}</div>
+            <div className="text-right font-semibold">
+              Total: {inr(total)}
+              {taxTotal > 0 ? <span className="ml-2 text-xs font-normal text-muted-foreground">(incl. purchase tax {inr(taxTotal)})</span> : null}
+            </div>
             <DialogFooter><Button onClick={save}>Save</Button></DialogFooter>
           </DialogContent>
         </Dialog>
