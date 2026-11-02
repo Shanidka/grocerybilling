@@ -260,8 +260,11 @@ function StockTab() {
 /* Purchases */
 type PurchaseRow = {
   product_id: string; name: string; qty: string; cost: string;
-  hsn: string; mrp: string; tax_pct: string; barcode: string;
+  hsn: string; mrp: string; tax_pct: string; tax_amount: string; barcode: string;
 };
+
+const reTax = (idx: number, p: Partial<PurchaseRow>) => (r: PurchaseRow, i: number) =>
+  i === idx ? (() => { const merged = { ...r, ...p }; return { ...merged, tax_amount: String(calcTaxAmount(Number(merged.qty), Number(merged.cost), Number(merged.tax_pct))) }; })() : r;
 
 function PurchasesTab() {
   const qc = useQueryClient();
