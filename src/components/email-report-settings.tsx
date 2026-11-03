@@ -61,8 +61,11 @@ export function EmailReportSettings() {
     }
   };
 
-  const toggle = async (id: string, field: keyof Recipient, value: boolean) => {
-    const { error } = await supabase.from("email_report_recipients").update({ [field]: value }).eq("id", id);
+  const toggle = async (id: string, field: "daily" | "weekly" | "monthly" | "yearly" | "is_active", value: boolean) => {
+    const payload =
+      field === "daily" ? { daily: value } : field === "weekly" ? { weekly: value } :
+      field === "monthly" ? { monthly: value } : field === "yearly" ? { yearly: value } : { is_active: value };
+    const { error } = await supabase.from("email_report_recipients").update(payload).eq("id", id);
     if (error) return toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["email-report-recipients"] });
   };
