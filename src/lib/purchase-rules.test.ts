@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+// @ts-ignore bun built-in test runner (run: bun test ./src/lib/purchase-rules.test.ts)
 import { calcTaxAmount, purchaseLineTotal } from "./purchase-tax";
 
 describe("purchase tax", () => {
