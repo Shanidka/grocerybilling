@@ -24,7 +24,7 @@ describe("PO WhatsApp share", () => {
     const msg = buildPoMessage(po, "Bazaar Supermarket");
     expect(msg).toContain("*Bazaar Supermarket* — Purchase Order");
     expect(msg).toContain("PO No: PO-20261105-0001");
-    expect(msg).toContain("1. Sunflower oil 1L — 12 pcs @ Rs.140.00 = Rs.1680.00");
+    expect(msg).toContain("1. Sunflower oil 1L (pcs) — 12 pcs @ Rs.140.00 = Rs.1680.00");
     expect(msg).toContain("2. Basmati rice 5kg (5000 g) — 5 bags @ Rs.480.00 = Rs.2400.00");
     expect(msg).toContain("Estimated total: Rs.4080.00");
     expect(msg).toContain("Destination: Main street branch");

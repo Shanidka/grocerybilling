@@ -26,7 +26,7 @@ describe("khata ledger", () => {
     const msg = statementMessage({ shopName: "Bazaar", customerName: "Anand", rows, upiId: "bazaar@upi" });
     expect(msg).toContain("*Bazaar* — Khata statement");
     expect(msg).toContain("*Outstanding: Rs.600.00*");
-    expect(msg).toContain("upi://pay?pa=bazaar@upi&am=600.00");
+    expect(msg).toContain("upi://pay?pa=bazaar@upi&pn=Bazaar&am=600.00&cu=INR");
     expect(msg).not.toContain("₹");
   });
 
