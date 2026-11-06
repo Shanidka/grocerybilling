@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { inr } from "@/lib/format";
 import {
-  Plus, Camera, Upload, Loader2, Boxes, Truck, Sliders, PackageX,
+  Plus, Camera, Boxes, Sliders, PackageX,
   Undo2, AlertTriangle, CalendarClock, ChevronDown, ShoppingCart, Trash2,
 } from "lucide-react";
 import { CameraScanner } from "@/components/camera-scanner";
