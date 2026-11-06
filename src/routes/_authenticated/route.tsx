@@ -45,32 +45,29 @@ const NAV: NavGroup[] = [
     { to: "/alerts", page: "alerts", label: "Alerts", icon: AlertTriangle },
     { to: "/documents", page: "documents", label: "Documents", icon: FileText },
   ] },
-  { group: "Sales", items: [
+  { group: "Billing & front counter", items: [
     { to: "/billing", page: "billing", label: "Billing", icon: ScanBarcode },
     { to: "/day-book", page: "day-book", label: "Day Book", icon: BookOpen },
+    { to: "/devices", page: "devices", label: "Devices", icon: Printer },
+  ] },
+  { group: "Inventory & purchasing", items: [
+    { to: "/products", page: "products", label: "Products", icon: Package },
+    { to: "/purchase-orders", page: "purchase-orders", label: "Purchase Orders", icon: ClipboardList },
+    { to: "/purchases", page: "purchases", label: "Purchases", icon: Truck },
+    { to: "/inventory", page: "inventory", label: "Inventory Hub", icon: Boxes },
+  ] },
+  { group: "CRM & accounts", items: [
     { to: "/customers", page: "customers", label: "Customers", icon: Users },
     { to: "/loyalty", page: "loyalty", label: "Loyalty", icon: Gift },
-    { to: "/credit", page: "credit", label: "Credit", icon: HandCoins },
-    { to: "/reports", page: "reports", label: "Reports", icon: BarChart3 },
-    { to: "/trends", page: "trends", label: "Trends", icon: TrendingUp },
-  ] },
-  { group: "Products", items: [
-    { to: "/products", page: "products", label: "Products", icon: Package },
-    { to: "/inventory", page: "inventory", label: "Inventory", icon: Boxes },
-  ] },
-  { group: "Purchases", items: [
-    { to: "/purchase-orders", page: "purchase-orders", label: "Purchase Orders", icon: ClipboardList },
-    { to: "/suppliers", page: "suppliers", label: "Suppliers", icon: Truck },
+    { to: "/credit", page: "credit", label: "Credit (Khata)", icon: HandCoins },
     { to: "/expenses", page: "expenses", label: "Expenses", icon: Wallet },
   ] },
-  { group: "Employees", items: [
-    { to: "/staff", page: "staff", label: "Staff", icon: UserCog },
-  ] },
-  { group: "Branch settings", items: [
-    { to: "/devices", page: "devices", label: "Devices", icon: Printer },
+  { group: "Reports & admin", items: [
+    { to: "/reports", page: "reports", label: "Sales & Profit", icon: BarChart3 },
+    { to: "/trends", page: "trends", label: "Trends", icon: TrendingUp },
+    { to: "/staff", page: "staff", label: "Staff & Roles", icon: UserCog },
     { to: "/settings", page: "settings", label: "Settings", icon: SettingsIcon },
   ] },
-
 ];
 
 
