@@ -16,6 +16,7 @@ export const PAGES = [
   { key: "products", label: "Products" },
   { key: "inventory", label: "Inventory" },
   { key: "purchase-orders", label: "Purchase Orders" },
+  { key: "purchases", label: "Purchase Entry" },
   { key: "suppliers", label: "Suppliers" },
   { key: "expenses", label: "Expenses" },
   { key: "staff", label: "Staff" },
@@ -82,7 +83,8 @@ export function useAccess() {
   const can = (page: string) => {
     if (isAdmin) return true;
     if (!keys.length) return false;
-    const resolvedPage = page === "loyalty" && !rows.some((r) => keys.includes(r.role_key) && r.page === "loyalty") ? "customers" : page;
+    const inherits: Record<string, string> = { loyalty: "customers", purchases: "inventory" };
+    const resolvedPage = inherits[page] && !rows.some((r) => keys.includes(r.role_key) && r.page === page) ? inherits[page] : page;
     const relevant = rows.filter((r) => keys.includes(r.role_key) && r.page === resolvedPage);
     if (!relevant.length) return false;
     return relevant.some((r) => r.allowed);

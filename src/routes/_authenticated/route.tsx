@@ -1,7 +1,7 @@
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff, Package, Settings as SettingsIcon, AlertTriangle, BarChart3, Boxes, Users, Truck, UserCog, ClipboardList, Wallet, FileText, Store, Check, ChevronsUpDown, ChevronRight, ChevronLeft, BookOpen, HandCoins, TrendingUp, Printer, Gift } from "lucide-react";
+import { LayoutDashboard, ScanBarcode, LogOut, ShoppingCart, Menu, X, WifiOff, Package, Settings as SettingsIcon, AlertTriangle, BarChart3, Boxes, Users, Truck, UserCog, ClipboardList, Wallet, FileText, Store, Check, ChevronsUpDown, ChevronRight, ChevronLeft, ChevronDown, BookOpen, HandCoins, TrendingUp, Printer, Gift } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useMyRoles } from "@/hooks/use-role";
@@ -54,6 +54,7 @@ const NAV: NavGroup[] = [
     { to: "/products", page: "products", label: "Products", icon: Package },
     { to: "/purchase-orders", page: "purchase-orders", label: "Purchase Orders", icon: ClipboardList },
     { to: "/purchases", page: "purchases", label: "Purchases", icon: Truck },
+    { to: "/suppliers", page: "suppliers", label: "Suppliers", icon: Truck },
     { to: "/inventory", page: "inventory", label: "Inventory Hub", icon: Boxes },
   ] },
   { group: "CRM & accounts", items: [
@@ -82,6 +83,14 @@ function AppShell() {
   const [storePickerOpen, setStorePickerOpen] = useState(false);
 
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem("bz_nav_collapsed") ?? "{}"); } catch { return {}; }
+  });
+  const toggleGroup = (g: string) => setCollapsed((c) => {
+    const next = { ...c, [g]: !c[g] };
+    try { localStorage.setItem("bz_nav_collapsed", JSON.stringify(next)); } catch { /* noop */ }
+    return next;
+  });
   const [sideHidden, setSideHidden] = useState(false);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
 
@@ -204,8 +213,10 @@ function AppShell() {
             if (!items.length) return null;
             return (
               <div key={g.group} className="ml-3 pl-3 border-l border-sidebar-border/70 space-y-1">
-                <div className="px-1 pb-1 text-[10px] uppercase tracking-wider text-sidebar-foreground/45">{g.group}</div>
-                {items.map((n) => {
+                <button type="button" onClick={() => toggleGroup(g.group)} aria-expanded={!collapsed[g.group]} className="w-full flex items-center justify-between px-1 pb-1 text-[10px] uppercase tracking-wider text-sidebar-foreground/45 hover:text-sidebar-foreground">
+                  {g.group}<ChevronDown className={`size-3 transition-transform ${collapsed[g.group] ? "-rotate-90" : ""}`} />
+                </button>
+                {!collapsed[g.group] && items.map((n) => {
                   const active = pathname === n.to || pathname.startsWith(n.to + "/");
                   const Icon = n.icon;
                   return (
