@@ -1,5 +1,8 @@
 import { pageMeta } from "@/lib/page-meta";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { buildPoMessage, poWhatsAppUrl } from "@/lib/po-share";
+import { useShopSettings } from "@/lib/shop-settings";
+import { useActiveStore } from "@/lib/active-store";
 import { logActivity } from "@/lib/activity-log";
 import { supabase } from "@/integrations/supabase/client";
 import { useStoreId } from "@/lib/active-store";
@@ -15,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { inr } from "@/lib/format";
-import { Plus, Printer, Trash2, ClipboardList, Pencil, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, Printer, Trash2, ClipboardList, Pencil, CheckCircle2, XCircle, MessageCircle, PackageCheck } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/purchase-orders")({
   ssr: false,
@@ -37,6 +40,30 @@ function PurchaseOrdersPage() {
   const [editing, setEditing] = useState<PO | null>(null);
   const [creating, setCreating] = useState(false);
   const storeId = useStoreId();
+  const navigate = useNavigate();
+  const { data: shop } = useShopSettings();
+  const { store } = useActiveStore();
+  const shopName = store?.name || shop?.shop_name || "";
+  const supplierPhones = useQuery({
+    queryKey: ["po-supplier-phones", storeId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("suppliers").select("id,name,phone").eq("store_id", storeId);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const shareWhatsApp = async (po: PO) => {
+    const sup = (supplierPhones.data ?? []).find((s) => s.id === po.supplier_id)
+      ?? (supplierPhones.data ?? []).find((s) => po.supplier_name && s.name.toLowerCase() === po.supplier_name.toLowerCase());
+    const msg = buildPoMessage({ ...po, items: po.purchase_order_items }, shopName);
+    const { url, hasNumber } = poWhatsAppUrl(sup?.phone, msg);
+    if (!hasNumber) {
+      try { await navigator.clipboard?.writeText(msg); } catch { /* noop */ }
+      toast.info("No supplier phone saved — order text copied; pick the chat in WhatsApp");
+    }
+    window.open(url, "_blank", "noopener");
+  };
+  const receive = (po: PO) => navigate({ to: "/purchases", search: { po: po.id } });
 
   const list = useQuery({
     queryKey: ["purchase-orders", storeId, statusFilter],
@@ -81,6 +108,7 @@ function PurchaseOrdersPage() {
               <SelectItem value="all">All statuses</SelectItem>
               <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="sent">Sent</SelectItem>
+              <SelectItem value="partially_received">Partially received</SelectItem>
               <SelectItem value="received">Received</SelectItem>
               <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
@@ -118,17 +146,18 @@ function PurchaseOrdersPage() {
                       <td className="px-4 py-3">{val > 0 ? inr(val) : "—"}</td>
                       <td className="px-4 py-3">
                         <Badge variant={po.status === "received" ? "default" : po.status === "cancelled" ? "destructive" : "outline"} className="capitalize">
-                          {po.status}
+                          {po.status.replace("_", " ")}
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-right space-x-1">
                         <Button size="sm" variant="ghost" onClick={() => setEditing(po)}><Pencil className="size-3.5" /></Button>
-                        <Button size="sm" variant="ghost" onClick={() => printPO(po)}><Printer className="size-3.5" /></Button>
+                        <Button size="sm" variant="ghost" title="Print" onClick={() => printPO(po)}><Printer className="size-3.5" /></Button>
+                        <Button size="sm" variant="ghost" title="Share via WhatsApp" aria-label="Share via WhatsApp" onClick={() => shareWhatsApp(po)}><MessageCircle className="size-3.5" /></Button>
+                        {["draft", "sent", "partially_received"].includes(po.status) && (
+                          <Button size="sm" variant="outline" title="Receive into stock" onClick={() => receive(po)}><PackageCheck className="size-3.5" /> Receive</Button>
+                        )}
                         {po.status === "draft" && (
                           <Button size="sm" variant="ghost" onClick={() => setStatus(po.id, "sent")}><CheckCircle2 className="size-3.5 text-primary" /></Button>
-                        )}
-                        {po.status === "sent" && (
-                          <Button size="sm" variant="ghost" onClick={() => setStatus(po.id, "received")}><CheckCircle2 className="size-3.5 text-primary" /></Button>
                         )}
                         {po.status !== "cancelled" && po.status !== "received" && (
                           <Button size="sm" variant="ghost" onClick={() => setStatus(po.id, "cancelled")}><XCircle className="size-3.5 text-destructive" /></Button>
@@ -147,6 +176,7 @@ function PurchaseOrdersPage() {
       {(creating || editing) && (
         <POEditor
           existing={editing}
+          onShare={editing ? () => shareWhatsApp(editing) : undefined}
           onClose={() => { setCreating(false); setEditing(null); }}
           onSaved={() => { qc.invalidateQueries({ queryKey: ["purchase-orders"] }); setCreating(false); setEditing(null); }}
         />
@@ -159,7 +189,7 @@ function PurchaseOrdersPage() {
 type Product = { id: string; name: string; unit: string; barcode: string | null; purchase_price: number; mrp: number; net_weight_g: number | null; brand: string | null };
 type Supplier = { id: string; name: string };
 
-function POEditor({ existing, onClose, onSaved }: { existing: PO | null; onClose: () => void; onSaved: () => void }) {
+function POEditor({ existing, onClose, onSaved, onShare }: { existing: PO | null; onClose: () => void; onSaved: () => void; onShare?: () => void }) {
   const storeId = useStoreId();
   const products = useQuery({
     queryKey: ["po-products", storeId],
@@ -357,6 +387,7 @@ function POEditor({ existing, onClose, onSaved }: { existing: PO | null; onClose
 
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
+          {onShare && <Button variant="outline" onClick={onShare}><MessageCircle className="size-4" /> Share via WhatsApp</Button>}
           <Button variant="secondary" onClick={() => save("draft")} disabled={saving}>Save draft</Button>
           <Button onClick={() => save("sent")} disabled={saving}>Save &amp; mark sent</Button>
         </DialogFooter>
