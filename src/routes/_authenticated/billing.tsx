@@ -28,6 +28,7 @@ import { BillingFavourites } from "@/components/billing-favourites";
 import { cashTender } from "@/lib/cash-tender";
 import { useCustomers } from "@/lib/customers";
 import { creditAvailable } from "@/lib/credit-rules";
+import { BillingCustomerLookup } from "@/components/billing-customer-lookup";
 
 
 export const Route = createFileRoute("/_authenticated/billing")({
@@ -460,9 +461,10 @@ function Billing() {
               </div>
               <div>
                 <Label className="text-xs">Phone</Label>
-                <Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Optional" className="h-9" />
+                <Input value={customerPhone} inputMode="tel" aria-label="Customer phone" onChange={(e) => setCustomerPhone(e.target.value)} placeholder="10-digit mobile" className="h-9" />
               </div>
             </div>
+            <BillingCustomerLookup phone={customerPhone} name={customerName} onName={setCustomerName} />
           </div>
 
           <div className="flex-1 overflow-auto p-4 space-y-2 text-sm">
@@ -602,7 +604,8 @@ function PaymentDialog({
   // Store-level identity overrides the organization defaults on receipts and UPI QR
   const { data: customers } = useCustomers();
   const creditKey = (customerPhone || customerName || "Walk-in").toLowerCase();
-  const creditCustomer = customers?.find((c) => (c.phone || c.name).toLowerCase() === creditKey);
+  const creditCustomer = customers?.find((c) => (c.phone || c.name).toLowerCase() === creditKey)
+    ?? (customerPhone.replace(/\D/g, "").length === 10 ? customers?.find((c) => (c.phone ?? "").replace(/\D/g, "").slice(-10) === customerPhone.replace(/\D/g, "")) : undefined);
   const creditBalance = useQuery({
     queryKey: ["billing-credit", storeId, creditKey],
     enabled: open && Boolean(creditCustomer?.credit_limit != null),
@@ -846,6 +849,7 @@ function PaymentDialog({
       qc.invalidateQueries({ queryKey: ["customers"] });
       qc.invalidateQueries({ queryKey: ["billing-credit"] });
       qc.invalidateQueries({ queryKey: ["credit-sales"] });
+      qc.invalidateQueries({ queryKey: ["customer-account"] });
       onCompleted(bill_no, customerPhone, due, receipt, action);
       onClose();
     } catch (e: unknown) {

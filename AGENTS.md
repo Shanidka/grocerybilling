@@ -18,3 +18,5 @@
 - Customer credit caps are optional and enforced by a sales trigger; credit rejections must never become offline bills. Why: UI checks and network fallback cannot bypass configured limits.
 - Cash counts are immutable store/day snapshots submitted through an authorized RPC, with India-time boundaries and manager-only expected totals. Why: closing records must be auditable and cashier submissions must not disclose expected amounts.
 - Loyalty navigation inherits Customers access until an explicit Loyalty page permission is configured. Why: adding a page must not hide it from existing customer-access designations.
+- Purchase entry lives only on /purchases; POs are received by opening /purchases?po=<id>, which prefills the entry and sets the PO status to received/partially_received. Why: one intake path keeps stock and avg_cost triggers authoritative.
+- Customer bills/khata use the shared useCustomerAccount query keyed by phone (else name). Why: billing lookup, ledger and credit must agree on outstanding.

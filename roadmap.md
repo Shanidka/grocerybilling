@@ -18,3 +18,10 @@
 
 ## Later phases
 - Phase 3: Scale barcode formats; expiry markdown suggestions; GSTR-1/GSTR-3B summaries
+
+## Workflow sweep (5 steps)
+- [x] Grouped collapsible sidebar + dedicated Purchase entry page
+- [x] PO WhatsApp sharing
+- [x] PO "Receive into stock" → purchase entry, marks received / partially received
+- [x] Billing phone lookup + inline quick-add
+- [x] Customer Bills and Khata ledger tabs (print / WhatsApp statement)
